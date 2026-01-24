@@ -1,0 +1,76 @@
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw } from 'lucide-react-native';
+import { colors } from '@/constants/theme';
+import { useAuth } from '@/contexts/AuthContext';
+
+export default function TabLayout() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isAuthenticated, isLoading]);
+
+  return (
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: colors.surface,
+          borderTopColor: colors.border,
+        },
+        headerStyle: {
+          backgroundColor: colors.surface,
+        },
+        headerTintColor: colors.text,
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Tableau de bord',
+          tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="inventory"
+        options={{
+          title: 'Équipements',
+          tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="planning"
+        options={{
+          title: 'Planning',
+          tabBarIcon: ({ color, size }) => <Calendar size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="missions"
+        options={{
+          title: 'Missions',
+          tabBarIcon: ({ color, size }) => <ClipboardList size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="nc"
+        options={{
+          title: 'NC & Actions',
+          tabBarIcon: ({ color, size }) => <AlertTriangle size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="sync"
+        options={{
+          title: 'Sync',
+          tabBarIcon: ({ color, size }) => <RefreshCw size={size} color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}

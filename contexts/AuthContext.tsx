@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
 import { userRepository } from '@/repositories/UserRepository';
+import { useDatabase } from '@/contexts/DatabaseContext';
 
 const STORAGE_KEY = 'inspectra_auth';
 
@@ -52,15 +53,20 @@ async function setStoredAuth(auth: StoredAuth | null): Promise<void> {
 }
 
 export const [AuthProvider, useAuth] = createContextHook(() => {
+  const { isReady: dbReady } = useDatabase();
   const [state, setState] = useState<AuthState>({
     user: null,
     isLoading: true,
     isAuthenticated: false,
   });
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadStoredAuth();
-  }, []);
+    if (dbReady && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadStoredAuth();
+    }
+  }, [dbReady]);
 
   const loadStoredAuth = async () => {
     console.log('[AUTH] Loading stored auth...');
@@ -81,17 +87,22 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
     console.log('[AUTH] Attempting login for:', email);
     
-    const user = await userRepository.getByEmail(email);
-    
-    if (!user) {
-      console.log('[AUTH] User not found');
+    try {
+      const user = await userRepository.getByEmail(email.toLowerCase().trim());
+      
+      if (!user) {
+        console.log('[AUTH] User not found for email:', email);
+        return false;
+      }
+      
+      await setStoredAuth({ userId: user.id });
+      setState({ user, isLoading: false, isAuthenticated: true });
+      console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
+      return true;
+    } catch (error) {
+      console.error('[AUTH] Login error:', error);
       return false;
     }
-    
-    await setStoredAuth({ userId: user.id });
-    setState({ user, isLoading: false, isAuthenticated: true });
-    console.log('[AUTH] Login successful');
-    return true;
   }, []);
 
   const loginAsRole = useCallback(async (role: UserRole): Promise<boolean> => {

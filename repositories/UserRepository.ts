@@ -11,8 +11,17 @@ export class UserRepository extends BaseRepository<User> {
   async getByEmail(email: string): Promise<User | null> {
     if (Platform.OS === 'web') return null;
     
-    const db = await getDatabase();
-    return db.getFirstAsync<User>('SELECT * FROM users WHERE email = ?', [email]);
+    try {
+      const db = await getDatabase();
+      const normalizedEmail = email.toLowerCase().trim();
+      console.log('[USER_REPO] Looking for user with email:', normalizedEmail);
+      const user = await db.getFirstAsync<User>('SELECT * FROM users WHERE LOWER(email) = ?', [normalizedEmail]);
+      console.log('[USER_REPO] Found user:', user ? user.email : 'null');
+      return user;
+    } catch (error) {
+      console.error('[USER_REPO] Error getting user by email:', error);
+      return null;
+    }
   }
 
   async getByRole(role: UserRole): Promise<User[]> {

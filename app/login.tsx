@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Shield } from 'lucide-react-native';
@@ -90,8 +90,15 @@ export default function LoginScreen() {
             />
           </View>
 
+          <View style={styles.demoBox}>
+            <Text style={styles.demoTitle}>Comptes de démonstration</Text>
+            <Text style={styles.demoCredential}>Technicien: technicien@inspectra.fr</Text>
+            <Text style={styles.demoCredential}>HSE Manager: hse@inspectra.fr</Text>
+            <Text style={styles.demoNote}>(mot de passe: laisser vide)</Text>
+          </View>
+
           <Text style={styles.hint}>
-            Contactez votre administrateur si vous n'avez pas de compte
+            Contactez votre administrateur si vous n&apos;avez pas de compte
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -148,9 +155,36 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   hint: {
-    marginTop: spacing.xxl,
+    marginTop: spacing.lg,
     textAlign: 'center',
     color: colors.textMuted,
     fontSize: typography.caption.fontSize,
+  },
+  demoBox: {
+    marginTop: spacing.xxl,
+    padding: spacing.md,
+    backgroundColor: colors.primary + '10',
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.primary + '30',
+  },
+  demoTitle: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '600' as const,
+    color: colors.primary,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  demoCredential: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.text,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  demoNote: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    textAlign: 'center',
+    fontStyle: 'italic',
   },
 });

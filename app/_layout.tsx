@@ -7,6 +7,7 @@ import { DatabaseProvider, useDatabase } from "@/contexts/DatabaseContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { colors } from "@/constants/theme";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
+import { trpc, trpcClient } from "@/lib/trpc";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -88,15 +89,17 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <DatabaseProvider>
-          <AuthProvider>
-            <RootLayoutNav />
-          </AuthProvider>
-        </DatabaseProvider>
-      </GestureHandlerRootView>
-    </QueryClientProvider>
+    <trpc.Provider client={trpcClient} queryClient={queryClient}>
+      <QueryClientProvider client={queryClient}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <DatabaseProvider>
+            <AuthProvider>
+              <RootLayoutNav />
+            </AuthProvider>
+          </DatabaseProvider>
+        </GestureHandlerRootView>
+      </QueryClientProvider>
+    </trpc.Provider>
   );
 }
 

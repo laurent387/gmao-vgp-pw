@@ -9,14 +9,14 @@ const app = new Hono();
 
 app.use("*", cors());
 
-app.use(
-  "/trpc/*",
-  trpcServer({
-    endpoint: "/api/trpc",
-    router: appRouter,
-    createContext,
-  }),
-);
+const trpcHandler = trpcServer({
+  endpoint: "/api/trpc",
+  router: appRouter,
+  createContext,
+});
+
+app.use("/api/trpc/*", trpcHandler);
+app.use("/trpc/*", trpcHandler);
 
 app.get("/", (c) => {
   return c.json({ status: "ok", message: "In-Spectra API is running" });

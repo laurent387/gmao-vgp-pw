@@ -15,7 +15,7 @@ import { missionRepository } from '@/repositories/MissionRepository';
 import { ncRepository, actionRepository } from '@/repositories/NCRepository';
 import { reportRepository } from '@/repositories/ReportRepository';
 import { assetRepository } from '@/repositories/AssetRepository';
-import { Mission, NonConformity } from '@/types';
+import { Mission, NonConformity, Report } from '@/types';
 
 interface ManagerStats {
   totalMissions: number;
@@ -61,8 +61,8 @@ export default function ManagerDashboardScreen() {
         assetRepository.getOverdueCount(),
       ]);
 
-      const conformeReports = totalReports.filter(r => r.conclusion === 'CONFORME').length;
-      const nonConformeReports = totalReports.filter(r => r.conclusion === 'NON_CONFORME').length;
+      const conformeReports = totalReports.filter((r: Report) => r.conclusion === 'CONFORME').length;
+      const nonConformeReports = totalReports.filter((r: Report) => r.conclusion === 'NON_CONFORME').length;
 
       return {
         totalMissions: allMissions.length,

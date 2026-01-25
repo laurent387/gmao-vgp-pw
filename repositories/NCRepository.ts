@@ -116,6 +116,50 @@ export class NCRepository extends BaseRepository<NonConformity> {
     await db.runAsync('UPDATE nonconformities SET status = ? WHERE id = ?', [status, id]);
   }
 
+  async getByStatus(status: NCStatus): Promise<NonConformity[]> {
+    if (Platform.OS === 'web') return [];
+    
+    const db = await getDatabase();
+    return db.getAllAsync<NonConformity>(
+      `SELECT nc.*, a.code_interne as asset_code, a.designation as asset_designation
+       FROM nonconformities nc
+       LEFT JOIN assets a ON nc.asset_id = a.id
+       WHERE nc.status = ?
+       ORDER BY nc.created_at DESC`,
+      [status]
+    );
+  }
+
+  async update(id: string, data: Partial<NonConformity>): Promise<void> {
+    if (Platform.OS === 'web') return;
+    
+    const db = await getDatabase();
+    const fields: string[] = [];
+    const values: any[] = [];
+    
+    if (data.status !== undefined) {
+      fields.push('status = ?');
+      values.push(data.status);
+    }
+    if (data.title !== undefined) {
+      fields.push('title = ?');
+      values.push(data.title);
+    }
+    if (data.description !== undefined) {
+      fields.push('description = ?');
+      values.push(data.description);
+    }
+    if (data.severity !== undefined) {
+      fields.push('severity = ?');
+      values.push(data.severity);
+    }
+    
+    if (fields.length > 0) {
+      values.push(id);
+      await db.runAsync(`UPDATE nonconformities SET ${fields.join(', ')} WHERE id = ?`, values);
+    }
+  }
+
   async getOpenCount(): Promise<number> {
     if (Platform.OS === 'web') return 0;
     
@@ -167,6 +211,54 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
       WHERE status IN ('OUVERTE', 'EN_COURS') AND due_at < datetime('now')
     `);
     return result?.count ?? 0;
+  }
+
+  async getByStatus(status: ActionStatus): Promise<CorrectiveAction[]> {
+    if (Platform.OS === 'web') return [];
+    
+    const db = await getDatabase();
+    return db.getAllAsync<CorrectiveAction>(
+      'SELECT * FROM corrective_actions WHERE status = ? ORDER BY due_at ASC',
+      [status]
+    );
+  }
+
+  async update(id: string, data: Partial<CorrectiveAction>): Promise<void> {
+    if (Platform.OS === 'web') return;
+    
+    const db = await getDatabase();
+    const fields: string[] = [];
+    const values: any[] = [];
+    
+    if (data.status !== undefined) {
+      fields.push('status = ?');
+      values.push(data.status);
+    }
+    if (data.owner !== undefined) {
+      fields.push('owner = ?');
+      values.push(data.owner);
+    }
+    if (data.description !== undefined) {
+      fields.push('description = ?');
+      values.push(data.description);
+    }
+    if (data.due_at !== undefined) {
+      fields.push('due_at = ?');
+      values.push(data.due_at);
+    }
+    if (data.closed_at !== undefined) {
+      fields.push('closed_at = ?');
+      values.push(data.closed_at);
+    }
+    if (data.validated_by !== undefined) {
+      fields.push('validated_by = ?');
+      values.push(data.validated_by);
+    }
+    
+    if (fields.length > 0) {
+      values.push(id);
+      await db.runAsync(`UPDATE corrective_actions SET ${fields.join(', ')} WHERE id = ?`, values);
+    }
   }
 }
 

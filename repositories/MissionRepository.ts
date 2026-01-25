@@ -122,6 +122,16 @@ export class MissionRepository extends BaseRepository<Mission> {
     await db.runAsync('UPDATE missions SET status = ? WHERE id = ?', [status, id]);
   }
 
+  async getByStatus(status: MissionStatus): Promise<Mission[]> {
+    if (Platform.OS === 'web') return [];
+    
+    const db = await getDatabase();
+    return db.getAllAsync<Mission>(
+      'SELECT * FROM missions WHERE status = ? ORDER BY scheduled_at DESC',
+      [status]
+    );
+  }
+
   async getMissionAssets(missionId: string): Promise<Asset[]> {
     if (Platform.OS === 'web') return [];
     

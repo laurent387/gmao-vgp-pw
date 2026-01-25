@@ -10,6 +10,8 @@ import { maintenanceRouter } from "./routes/maintenance";
 import { syncRouter } from "./routes/sync";
 import { dashboardRouter } from "./routes/dashboard";
 import { adminRouter } from "./routes/admin";
+import { vgpRouter } from "./routes/vgp";
+import { attachmentsRouter } from "./routes/attachments";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -23,6 +25,8 @@ export const appRouter = createTRPCRouter({
   sync: syncRouter,
   dashboard: dashboardRouter,
   admin: adminRouter,
+  vgp: vgpRouter,
+  attachments: attachmentsRouter,
 });
 
 export type AppRouter = typeof appRouter;

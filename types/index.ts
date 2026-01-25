@@ -60,6 +60,8 @@ export interface Asset {
   modele: string;
   numero_serie: string;
   annee: number;
+  vgp_enabled?: boolean;
+  vgp_validity_months?: number | null;
   statut: AssetStatus;
   criticite: SeverityLevel;
   site_id: string;
@@ -231,4 +233,186 @@ export interface DueEcheance {
   days_remaining: number;
   is_overdue: boolean;
   site_name: string;
+}
+
+// =============================================
+// VGP PRESSES TYPES
+// =============================================
+
+export type VGPItemResult = 'OUI' | 'NON' | 'NA';
+export type VGPConclusion = 'EN_COURS' | 'CONFORME' | 'NON_CONFORME' | 'CONFORME_SOUS_RESERVE';
+export type VGPRunStatus = 'BROUILLON' | 'VALIDE';
+export type VGPObservationStatus = 'OUVERTE' | 'RESOLUE' | 'TRAITEE';
+
+export interface VGPTemplate {
+  id: string;
+  name: string;
+  machine_type: string;
+  version: number;
+  active: boolean;
+  referentiel: string | null;
+  metadata: any;
+  created_at: string;
+  updated_at: string;
+  sections?: VGPTemplateSection[];
+}
+
+export interface VGPTemplateSection {
+  id: string;
+  template_id: string;
+  code: string;
+  title: string;
+  sort_order: number;
+  items?: VGPTemplateItem[];
+}
+
+export interface VGPTemplateItem {
+  id: string;
+  section_id: string;
+  numero: number;
+  label: string;
+  help_text: string | null;
+  sort_order: number;
+  active: boolean;
+  section_code?: string;
+  section_title?: string;
+  result?: VGPItemResultRecord | null;
+}
+
+export interface VGPReport {
+  id: string;
+  client_id: string;
+  site_id: string;
+  numero_rapport: string;
+  date_rapport: string;
+  signataire: string;
+  synthese: string | null;
+  has_observations: boolean;
+  pdf_path: string | null;
+  pdf_url: string | null;
+  metadata: any;
+  created_at: string;
+  updated_at: string;
+  client_name?: string;
+  site_name?: string;
+  runs?: VGPInspectionRun[];
+}
+
+export interface VGPInspectionRun {
+  id: string;
+  report_id: string;
+  template_id: string;
+  asset_id: string;
+  date_inspection: string;
+  verificateur: string;
+  compteur_type: string | null;
+  compteur_valeur: number | null;
+  conditions_intervention: string | null;
+  modes_fonctionnement: string | null;
+  moyens_disposition: boolean;
+  conclusion: VGPConclusion;
+  particularites: string | null;
+  statut: VGPRunStatus;
+  signed_by: string | null;
+  signed_at: string | null;
+  created_at: string;
+  updated_at: string;
+  asset_code?: string;
+  asset_designation?: string;
+  asset_marque?: string;
+  asset_modele?: string;
+  asset_numero_serie?: string;
+  asset_annee?: number;
+  asset_force?: string;
+  observationCount?: number;
+  template?: VGPTemplate;
+  sections?: VGPTemplateSection[];
+  observations?: VGPObservation[];
+}
+
+export interface VGPItemResultRecord {
+  id: string;
+  run_id: string;
+  item_id: string;
+  result: VGPItemResult;
+  comment: string | null;
+  photos: any;
+  created_at: string;
+  updated_at: string;
+  item_numero?: number;
+  item_label?: string;
+  section_code?: string;
+}
+
+export interface VGPObservation {
+  id: string;
+  run_id: string;
+  asset_id: string;
+  item_id: string | null;
+  item_numero: number | null;
+  description: string;
+  recommandation: string | null;
+  gravite: number;
+  statut: VGPObservationStatus;
+  is_auto: boolean;
+  pieces_jointes: any;
+  created_at: string;
+  updated_at: string;
+  asset_code?: string;
+  asset_designation?: string;
+}
+
+// =============================================
+// ATTACHMENTS & DOCUMENTS MODULE
+// =============================================
+
+export type AttachmentOwnerType = 'EQUIPMENT' | 'REPORT' | 'VGP_REPORT' | 'VGP_RUN';
+export type AttachmentFileType = 'PDF' | 'IMAGE';
+export type AttachmentCategory = 
+  | 'DOCUMENTATION'
+  | 'CERTIFICAT_LEGAL'
+  | 'RAPPORT'
+  | 'PLAQUE_IDENTIFICATION'
+  | 'PHOTO'
+  | 'AUTRE';
+export type AttachmentStatus = 'ACTIVE' | 'ARCHIVED';
+
+export interface Attachment {
+  id: string;
+  owner_type: AttachmentOwnerType;
+  owner_id: string;
+  file_type: AttachmentFileType;
+  category: AttachmentCategory;
+  title: string;
+  original_file_name: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_key: string;
+  is_private: boolean;
+  checksum: string | null;
+  status: AttachmentStatus;
+  version_number: number;
+  parent_id: string | null;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  updated_by: string | null;
+  archived_at: string | null;
+  // Virtual fields
+  download_url?: string;
+  uploader_name?: string;
+}
+
+export interface AttachmentUploadInput {
+  ownerType: AttachmentOwnerType;
+  ownerId: string;
+  category: AttachmentCategory;
+  title: string;
+  isPrivate?: boolean;
+}
+
+export interface AttachmentUpdateInput {
+  title?: string;
+  category?: AttachmentCategory;
+  isPrivate?: boolean;
 }

@@ -112,30 +112,37 @@ export class AssetRepository extends BaseRepository<Asset> {
     const now = this.formatDate(new Date());
     
     await db.runAsync(`
-      INSERT INTO assets (id, code_interne, designation, categorie, marque, modele, numero_serie, annee, statut, criticite, site_id, zone_id, mise_en_service, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO assets (id, code_interne, designation, categorie, marque, modele, numero_serie, annee, vgp_enabled, vgp_validity_months, statut, criticite, site_id, zone_id, mise_en_service, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       id, asset.code_interne, asset.designation, asset.categorie, asset.marque, asset.modele,
-      asset.numero_serie, asset.annee, asset.statut, asset.criticite, asset.site_id, asset.zone_id,
-      asset.mise_en_service, now
+      asset.numero_serie, asset.annee, asset.vgp_enabled ? 1 : 0, asset.vgp_validity_months ?? null,
+      asset.statut, asset.criticite, asset.site_id, asset.zone_id, asset.mise_en_service, now
     ]);
     
     return id;
   }
 
   async update(id: string, asset: Partial<Asset>): Promise<void> {
-    if (Platform.OS === 'web') return;
+    if (Platform.OS === 'web') {
+      await webApiService.updateAsset(id, asset);
+      return;
+    }
     
     const db = await getDatabase();
     const fields: string[] = [];
     const values: any[] = [];
     
-    const updateableFields = ['code_interne', 'designation', 'categorie', 'marque', 'modele', 'numero_serie', 'annee', 'statut', 'criticite', 'site_id', 'zone_id', 'mise_en_service'];
+    const updateableFields = ['code_interne', 'designation', 'categorie', 'marque', 'modele', 'numero_serie', 'annee', 'vgp_enabled', 'vgp_validity_months', 'statut', 'criticite', 'site_id', 'zone_id', 'mise_en_service'];
     
     for (const field of updateableFields) {
       if (asset[field as keyof Asset] !== undefined) {
         fields.push(`${field} = ?`);
-        values.push(asset[field as keyof Asset]);
+        if (field === 'vgp_enabled') {
+          values.push(asset[field as keyof Asset] ? 1 : 0);
+        } else {
+          values.push(asset[field as keyof Asset]);
+        }
       }
     }
     

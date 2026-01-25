@@ -9,10 +9,17 @@ export class UserRepository extends BaseRepository<User> {
     super('users');
   }
 
+  private normalize(list: any): any[] {
+    if (Array.isArray(list)) return list;
+    if (list && Array.isArray((list as any).json)) return (list as any).json as any[];
+    return [];
+  }
+
   async getByEmail(email: string): Promise<User | null> {
     if (Platform.OS === 'web') {
       try {
-        const users = await trpcClient.auth.listUsers.query();
+        const raw = await trpcClient.auth.listUsers.query();
+        const users = this.normalize(raw);
         const normalizedEmail = email.toLowerCase().trim();
         const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
         return user ? {
@@ -45,7 +52,8 @@ export class UserRepository extends BaseRepository<User> {
   async getByRole(role: UserRole): Promise<User[]> {
     if (Platform.OS === 'web') {
       try {
-        const users = await trpcClient.auth.listUsers.query();
+        const raw = await trpcClient.auth.listUsers.query();
+        const users = this.normalize(raw);
         return users
           .filter(u => u.role === role)
           .map(u => ({
@@ -69,8 +77,9 @@ export class UserRepository extends BaseRepository<User> {
   async getTechnicians(): Promise<User[]> {
     console.log('[USER_REPO] Fetching technicians from backend');
     try {
-      const users = await trpcClient.auth.listTechnicians.query();
-      console.log('[USER_REPO] Got technicians from backend:', users.length);
+      const raw = await trpcClient.auth.listTechnicians.query();
+      const users = this.normalize(raw);
+      console.log('[USER_REPO] Got technicians from backend:', Array.isArray(users) ? users.length : 'undefined');
       return users.map(u => ({
         id: u.id,
         email: u.email,
@@ -94,8 +103,9 @@ export class UserRepository extends BaseRepository<User> {
   async getAll(): Promise<User[]> {
     console.log('[USER_REPO] Fetching all users from backend');
     try {
-      const users = await trpcClient.auth.listUsers.query();
-      console.log('[USER_REPO] Got users from backend:', users.length);
+      const raw = await trpcClient.auth.listUsers.query();
+      const users = this.normalize(raw);
+      console.log('[USER_REPO] Got users from backend:', Array.isArray(users) ? users.length : 'undefined');
       return users.map(u => ({
         id: u.id,
         email: u.email,

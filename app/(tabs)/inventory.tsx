@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Package, Filter, Building2, MapPin, X, ChevronDown, Check } from 'lucide-react-native';
-import { colors, spacing, borderRadius, shadows } from '@/constants/theme';
+import { Filter, Building2, MapPin, Check } from 'lucide-react-native';
+import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { SearchInput } from '@/components/Input';
-import { AssetListItem } from '@/components/ListItem';
+import { DataTable, type Column } from '@/components/DataTable';
+import { DesktopFilterBar } from '@/components/DesktopFilterBar';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { assetRepository, AssetFilters } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
 import type { Asset, AssetStatus, Client, Site } from '@/types';
@@ -22,63 +24,145 @@ interface FilterChipProps {
   label: string;
   selected: boolean;
   onPress: () => void;
-  icon?: React.ReactNode;
   color?: string;
 }
 
-function FilterChip({ label, selected, onPress, icon, color }: FilterChipProps) {
-  const chipColor = color || colors.primary;
-  
+function FilterChip({ label, selected, onPress, color }: FilterChipProps) {
   return (
     <TouchableOpacity
       onPress={onPress}
       activeOpacity={0.7}
       style={[
         styles.chip,
-        selected && { backgroundColor: chipColor, borderColor: chipColor },
+        selected && { backgroundColor: color || colors.primary, borderColor: color || colors.primary },
       ]}
     >
-      {icon && <View style={styles.chipIcon}>{icon}</View>}
-      <Text style={[
-        styles.chipText,
-        selected && styles.chipTextSelected,
-      ]} numberOfLines={1}>
+      <Text style={[styles.chipText, selected && styles.chipTextSelected]} numberOfLines={1}>
         {label}
       </Text>
-      {selected && (
-        <Check size={14} color={colors.textInverse} style={styles.chipCheck} />
-      )}
+      {selected && <Check size={14} color={colors.textInverse} />}
     </TouchableOpacity>
   );
 }
 
-interface ActiveFilterTagProps {
-  label: string;
-  onRemove: () => void;
-}
-
-function ActiveFilterTag({ label, onRemove }: ActiveFilterTagProps) {
+function MobileFilterPanel({
+  clients,
+  sites,
+  categories,
+  statuses,
+  filters,
+  onFilterChange,
+  onClearFilters,
+}: {
+  clients: Client[];
+  sites: Site[];
+  categories: string[];
+  statuses: AssetStatus[];
+  filters: AssetFilters;
+  onFilterChange: (key: string, value: any) => void;
+  onClearFilters: () => void;
+}) {
   return (
-    <View style={styles.activeTag}>
-      <Text style={styles.activeTagText} numberOfLines={1}>{label}</Text>
-      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <X size={14} color={colors.primary} />
+    <ScrollView style={styles.mobileFilterPanel} showsVerticalScrollIndicator={false}>
+      {/* Clients */}
+      <View style={styles.filterSection}>
+        <View style={styles.filterSectionHeader}>
+          <Building2 size={16} color={colors.textSecondary} />
+          <Text style={styles.filterSectionTitle}>Clients</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer}>
+          {clients.map((client) => (
+            <FilterChip
+              key={client.id}
+              label={client.name}
+              selected={filters.clientId === client.id}
+              onPress={() => onFilterChange('clientId', filters.clientId === client.id ? undefined : client.id)}
+            />
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Sites */}
+      {sites.length > 0 && (
+        <View style={styles.filterSection}>
+          <View style={styles.filterSectionHeader}>
+            <MapPin size={16} color={colors.textSecondary} />
+            <Text style={styles.filterSectionTitle}>Sites</Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer}>
+            {sites.map((site) => (
+              <FilterChip
+                key={site.id}
+                label={site.name}
+                selected={filters.siteId === site.id}
+                onPress={() => onFilterChange('siteId', filters.siteId === site.id ? undefined : site.id)}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Statuses */}
+      <View style={styles.filterSection}>
+        <Text style={styles.filterSectionTitle}>Statut</Text>
+        <View style={styles.statusGrid}>
+          {statuses.map((status) => {
+            const config = STATUS_CONFIG[status];
+            return (
+              <TouchableOpacity
+                key={status}
+                style={[
+                  styles.statusChip,
+                  { backgroundColor: config.bgColor },
+                  filters.statut === status && styles.statusChipSelected,
+                ]}
+                onPress={() => onFilterChange('statut', filters.statut === status ? undefined : status)}
+              >
+                <View style={[styles.statusDot, { backgroundColor: config.color }]} />
+                <Text style={[styles.statusChipText, { color: config.color }]}>{config.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* Categories */}
+      {categories.length > 0 && (
+        <View style={styles.filterSection}>
+          <Text style={styles.filterSectionTitle}>Catégorie</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsContainer}>
+            {categories.map((cat) => (
+              <FilterChip
+                key={cat}
+                label={cat}
+                selected={filters.categorie === cat}
+                onPress={() => onFilterChange('categorie', filters.categorie === cat ? undefined : cat)}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      )}
+
+      <TouchableOpacity style={styles.clearButton} onPress={onClearFilters}>
+        <Text style={styles.clearButtonText}>Réinitialiser les filtres</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 export default function InventoryScreen() {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
+  const screenSize = useScreenSize();
   const params = useLocalSearchParams<{ clientId?: string; siteId?: string }>();
   const initialClientId = typeof params.clientId === 'string' ? params.clientId : undefined;
   const initialSiteId = typeof params.siteId === 'string' ? params.siteId : undefined;
 
   const [search, setSearch] = useState<string>('');
   const [filters, setFilters] = useState<AssetFilters>({ clientId: initialClientId, siteId: initialSiteId });
-  const [showFilters, setShowFilters] = useState(false);
+  const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [filterHeight] = useState(new Animated.Value(0));
+  const [sortConfig, setSortConfig] = useState<{ key: string; order: 'asc' | 'desc' | null } | null>(null);
 
   const { data: assets, isLoading, refetch } = useQuery<Asset[]>({
     queryKey: ['assets', filters, search],
@@ -91,7 +175,7 @@ export default function InventoryScreen() {
   });
 
   const { data: sites } = useQuery<Site[]>({
-    queryKey: ['sites-with-client'],
+    queryKey: ['sites'],
     queryFn: () => siteRepository.getAllWithClientName(),
   });
 
@@ -100,37 +184,27 @@ export default function InventoryScreen() {
     queryFn: () => assetRepository.getCategories(),
   });
 
-  const sitesForSelectedClient = useMemo<Site[]>(() => {
-    const allSites = sites ?? [];
-    if (!filters.clientId) return allSites;
-    return allSites.filter((s) => s.client_id === filters.clientId);
-  }, [filters.clientId, sites]);
+  const clientList = Array.isArray(clients) ? clients : [];
+  const siteList = Array.isArray(sites) ? sites : [];
+  const categoryList = Array.isArray(categories) ? categories : [];
 
-  const activeFilterCount = useMemo(() => {
-    let count = 0;
-    if (filters.clientId) count++;
-    if (filters.siteId) count++;
-    if (filters.statut) count++;
-    if (filters.categorie) count++;
-    return count;
-  }, [filters]);
+  const sortedAssets = useMemo(() => {
+    if (!assets || !sortConfig) return assets;
 
-  const selectedClient = useMemo(() => {
-    return clients?.find(c => c.id === filters.clientId);
-  }, [clients, filters.clientId]);
+    const sorted = [...assets].sort((a, b) => {
+      const aVal = a[sortConfig.key as keyof Asset];
+      const bVal = b[sortConfig.key as keyof Asset];
 
-  const selectedSite = useMemo(() => {
-    return sites?.find(s => s.id === filters.siteId);
-  }, [sites, filters.siteId]);
+      if (aVal === bVal) return 0;
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
 
-  useEffect(() => {
-    if (!sites || !filters.siteId) return;
-    if (filters.clientId) return;
-    const site = sites.find((s) => s.id === filters.siteId);
-    if (!site) return;
-    console.log('[INVENTORY] inferred clientId from siteId', { siteId: filters.siteId, clientId: site.client_id });
-    setFilters((prev) => ({ ...prev, clientId: site.client_id }));
-  }, [filters.clientId, filters.siteId, sites]);
+      const comparison = aVal < bVal ? -1 : 1;
+      return sortConfig.order === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [assets, sortConfig]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -138,292 +212,192 @@ export default function InventoryScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const handleAssetPress = (id: string) => {
-    router.push(`/asset/${id}`);
+  const handleFilterChange = (key: string, value: any) => {
+    setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const toggleStatusFilter = (status: AssetStatus | undefined) => {
-    setFilters(f => ({ ...f, statut: f.statut === status ? undefined : status }));
-  };
-
-  const toggleCategoryFilter = (category: string | undefined) => {
-    setFilters(f => ({ ...f, categorie: f.categorie === category ? undefined : category }));
-  };
-
-  const toggleClientFilter = (clientId: string | undefined) => {
-    setFilters((prev) => {
-      const nextClientId = prev.clientId === clientId ? undefined : clientId;
-      return {
-        ...prev,
-        clientId: nextClientId,
-        siteId: nextClientId ? prev.siteId : undefined,
-        zoneId: undefined,
-      };
-    });
-  };
-
-  const toggleSiteFilter = (siteId: string | undefined) => {
-    setFilters((prev) => ({ ...prev, siteId: prev.siteId === siteId ? undefined : siteId, zoneId: undefined }));
-  };
-
-  const clearAllFilters = () => {
+  const handleClearFilters = () => {
     setFilters({});
+    setSearch('');
   };
 
-  const renderItem = ({ item }: { item: Asset }) => (
-    <AssetListItem
-      code={item.code_interne}
-      designation={item.designation}
-      categorie={item.categorie}
-      statut={item.statut}
-      criticite={item.criticite}
-      isOverdue={item.is_overdue}
-      siteName={item.site_name}
-      zoneName={item.zone_name}
-      onPress={() => handleAssetPress(item.id)}
-    />
-  );
-
-  const renderActiveFilters = () => {
-    if (activeFilterCount === 0) return null;
-    
-    return (
-      <View style={styles.activeFiltersContainer}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.activeFiltersContent}
-        >
-          {selectedClient && (
-            <ActiveFilterTag 
-              label={selectedClient.name} 
-              onRemove={() => toggleClientFilter(undefined)} 
-            />
-          )}
-          {selectedSite && (
-            <ActiveFilterTag 
-              label={selectedSite.name} 
-              onRemove={() => toggleSiteFilter(undefined)} 
-            />
-          )}
-          {filters.statut && (
-            <ActiveFilterTag 
-              label={STATUS_CONFIG[filters.statut].label} 
-              onRemove={() => toggleStatusFilter(undefined)} 
-            />
-          )}
-          {filters.categorie && (
-            <ActiveFilterTag 
-              label={filters.categorie} 
-              onRemove={() => toggleCategoryFilter(undefined)} 
-            />
-          )}
-        </ScrollView>
-        <TouchableOpacity onPress={clearAllFilters} style={styles.clearAllButton}>
-          <Text style={styles.clearAllText}>Effacer</Text>
-        </TouchableOpacity>
-      </View>
-    );
+  const handleRowPress = (asset: Asset) => {
+    router.push(`/asset/${asset.id}`);
   };
 
-  const renderListHeader = () => (
-    <View>
-      <View style={styles.header}>
-        <View style={styles.searchRow}>
-          <SearchInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Rechercher un équipement..."
-            style={styles.searchInput}
-          />
-          <TouchableOpacity
-            onPress={() => setShowFilters(!showFilters)}
-            activeOpacity={0.7}
-            style={[
-              styles.filterButton,
-              showFilters && styles.filterButtonActive,
-            ]}
-          >
-            <Filter size={20} color={showFilters ? colors.textInverse : colors.primary} />
-            {activeFilterCount > 0 && !showFilters && (
-              <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        </View>
-
-        {!showFilters && renderActiveFilters()}
-      </View>
-
-      {showFilters && (
-        <View style={styles.filtersPanel} testID="inventory-filters">
-          <View style={styles.filtersPanelHeader}>
-            <Text style={styles.filtersPanelTitle}>Filtres</Text>
-            {activeFilterCount > 0 && (
-              <TouchableOpacity onPress={clearAllFilters}>
-                <Text style={styles.resetFiltersText}>Réinitialiser</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-
-          <View style={styles.filtersContent}>
-            <View style={styles.filterSection}>
-              <View style={styles.filterSectionHeader}>
-                <Building2 size={16} color={colors.textSecondary} />
-                <Text style={styles.filterSectionTitle}>Client</Text>
-              </View>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.chipsScroll}
-              >
-                {(clients ?? [])
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((client) => (
-                    <FilterChip
-                      key={client.id}
-                      label={client.name}
-                      selected={filters.clientId === client.id}
-                      onPress={() => toggleClientFilter(client.id)}
-                    />
-                  ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.filterSection}>
-              <View style={styles.filterSectionHeader}>
-                <MapPin size={16} color={colors.textSecondary} />
-                <Text style={styles.filterSectionTitle}>Site</Text>
-                {filters.clientId && (
-                  <Text style={styles.filterSectionHint}>
-                    ({sitesForSelectedClient.length} disponibles)
-                  </Text>
-                )}
-              </View>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.chipsScroll}
-              >
-                {sitesForSelectedClient.length === 0 ? (
-                  <Text style={styles.noDataText}>Sélectionnez un client</Text>
-                ) : (
-                  sitesForSelectedClient
-                    .slice()
-                    .sort((a, b) => a.name.localeCompare(b.name))
-                    .map((site) => (
-                      <FilterChip
-                        key={site.id}
-                        label={site.name}
-                        selected={filters.siteId === site.id}
-                        onPress={() => toggleSiteFilter(site.id)}
-                      />
-                    ))
-                )}
-              </ScrollView>
-            </View>
-
-            <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Statut</Text>
-              <View style={styles.statusChipsContainer}>
-                {(Object.keys(STATUS_CONFIG) as AssetStatus[]).map((status) => {
-                  const config = STATUS_CONFIG[status];
-                  const isSelected = filters.statut === status;
-                  return (
-                    <TouchableOpacity
-                      key={status}
-                      onPress={() => toggleStatusFilter(status)}
-                      activeOpacity={0.7}
-                      style={[
-                        styles.statusChip,
-                        { 
-                          backgroundColor: isSelected ? config.color : config.bgColor,
-                          borderColor: config.color,
-                        },
-                      ]}
-                    >
-                      <View style={[
-                        styles.statusDot,
-                        { backgroundColor: isSelected ? colors.textInverse : config.color }
-                      ]} />
-                      <Text style={[
-                        styles.statusChipText,
-                        { color: isSelected ? colors.textInverse : config.color }
-                      ]}>
-                        {config.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-
-            {categories && categories.length > 0 && (
-              <View style={styles.filterSection}>
-                <Text style={styles.filterSectionTitle}>Catégorie</Text>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false} 
-                  contentContainerStyle={styles.chipsScroll}
-                >
-                  {categories.map((cat) => (
-                    <FilterChip
-                      key={cat}
-                      label={cat}
-                      selected={filters.categorie === cat}
-                      onPress={() => toggleCategoryFilter(cat)}
-                    />
-                  ))}
-                </ScrollView>
-              </View>
-            )}
-          </View>
-
-          <TouchableOpacity 
-            style={styles.applyButton}
-            onPress={() => setShowFilters(false)}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.applyButtonText}>
-              Voir {assets?.length ?? 0} résultat{(assets?.length ?? 0) !== 1 ? 's' : ''}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.resultsHeader}>
-        <Text style={styles.resultsCount}>
-          {assets?.length ?? 0} équipement{(assets?.length ?? 0) !== 1 ? 's' : ''}
-        </Text>
-      </View>
-    </View>
-  );
+  const handleSort = (key: string, order: 'asc' | 'desc' | null) => {
+    setSortConfig(order ? { key, order } : null);
+  };
 
   if (isLoading) {
-    return <LoadingState message="Chargement des équipements..." />;
+    return <LoadingState message="Chargement de l'inventaire..." />;
   }
 
+  // DESKTOP VIEW - TABLE
+  if (isDesktop) {
+    const tableColumns: Column<Asset>[] = [
+      {
+        key: 'code_interne',
+        title: 'Code',
+        width: 100,
+        sortable: true,
+      },
+      {
+        key: 'designation',
+        title: 'Désignation',
+        sortable: true,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'marque',
+        title: 'Marque',
+        width: 120,
+        sortable: true,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'modele',
+        title: 'Modèle',
+        width: 140,
+        sortable: true,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'categorie',
+        title: 'Catégorie',
+        width: 130,
+        sortable: true,
+      },
+      {
+        key: 'statut',
+        title: 'Statut',
+        width: 120,
+        render: (value: AssetStatus) => {
+          const config = STATUS_CONFIG[value];
+          return (
+            <View style={[styles.statusBadge, { backgroundColor: config.bgColor }]}>
+              <Text style={[styles.statusBadgeText, { color: config.color }]}>{config.label}</Text>
+            </View>
+          );
+        },
+      },
+      {
+        key: 'site_name',
+        title: 'Site',
+        width: 150,
+        sortable: true,
+        render: (value) => value || '-',
+      },
+    ];
+
+    return (
+      <View style={styles.container}>
+        {/* Desktop Filter Bar */}
+        <DesktopFilterBar
+          filters={{
+            'Client': clientList.map(c => ({ label: c.name, value: c.id })),
+            'Site': siteList.map(s => ({ label: s.name, value: s.id })),
+            'Catégorie': categoryList.map(c => ({ label: c, value: c })),
+            'Statut': Object.entries(STATUS_CONFIG).map(([key, config]) => ({
+              label: config.label,
+              value: key,
+            })),
+          }}
+          values={filters as any}
+          onChange={handleFilterChange}
+          onClear={(key) => handleFilterChange(key, undefined)}
+          searchValue={search}
+          onSearchChange={setSearch}
+        />
+
+        {/* Table */}
+        <DataTable<Asset>
+          columns={tableColumns}
+          data={sortedAssets || []}
+          onRowPress={handleRowPress}
+          onSort={handleSort}
+          loading={isLoading}
+        />
+
+        {/* Results count */}
+        <View style={styles.desktopFooter}>
+          <Text style={styles.resultsCountText}>
+            {sortedAssets?.length || 0} équipement{(sortedAssets?.length || 0) !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // MOBILE VIEW - CARDS
   return (
     <View style={styles.container}>
+      <View style={styles.mobileHeader}>
+        <SearchInput
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Rechercher..."
+          style={styles.mobileSearch}
+        />
+        <TouchableOpacity
+          style={[styles.filterButton, showMobileFilters && styles.filterButtonActive]}
+          onPress={() => setShowMobileFilters(!showMobileFilters)}
+        >
+          <Filter size={20} color={showMobileFilters ? colors.textInverse : colors.primary} />
+        </TouchableOpacity>
+      </View>
+
+      {showMobileFilters && (
+        <MobileFilterPanel
+          clients={clientList}
+          sites={siteList}
+          categories={categoryList}
+          statuses={Object.keys(STATUS_CONFIG) as AssetStatus[]}
+          filters={filters}
+          onFilterChange={handleFilterChange}
+          onClearFilters={handleClearFilters}
+        />
+      )}
+
       <FlatList
-        data={assets}
-        renderItem={renderItem}
+        data={sortedAssets || []}
         keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={[styles.assetCard, shadows.sm]}
+            onPress={() => handleRowPress(item)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.assetCardHeader}>
+              <Text style={styles.assetName} numberOfLines={1}>{item.designation}</Text>
+              <View style={[styles.statusChip, { backgroundColor: STATUS_CONFIG[item.statut].bgColor }]}>
+                <Text style={[styles.statusChipText, { color: STATUS_CONFIG[item.statut].color }]}>
+                  {STATUS_CONFIG[item.statut].label}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.assetDetails}>
+              <Text style={styles.detailLabel}>Marque: <Text style={styles.detailValue}>{item.marque || '-'}</Text></Text>
+              <Text style={styles.detailLabel}>Modèle: <Text style={styles.detailValue}>{item.modele || '-'}</Text></Text>
+              <Text style={styles.detailLabel}>Site: <Text style={styles.detailValue}>{item.site_name || '-'}</Text></Text>
+            </View>
+          </TouchableOpacity>
+        )}
         contentContainerStyle={styles.listContent}
-        ListHeaderComponent={renderListHeader}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         ListEmptyComponent={
           <EmptyState
-            icon={<Package size={48} color={colors.textMuted} />}
             title="Aucun équipement"
-            message="Aucun équipement ne correspond à vos critères"
+            message="Ajustez vos filtres ou recherchez un équipement"
           />
         }
       />
+
+      <View style={styles.mobileFooter}>
+        <Text style={styles.resultsCountText}>
+          {sortedAssets?.length || 0} équipement{(sortedAssets?.length || 0) !== 1 ? 's' : ''}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -433,115 +407,62 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
+  
+  // DESKTOP STYLES
+  desktopFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  statusBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  statusBadgeText: {
+    ...typography.body3,
+    fontWeight: '600',
+  },
+
+  // MOBILE STYLES
+  mobileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  searchRow: {
-    flexDirection: 'row',
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  searchInput: {
+  mobileSearch: {
     flex: 1,
+    height: 40,
   },
   filterButton: {
-    width: 48,
-    height: 48,
+    width: 40,
+    height: 40,
     borderRadius: borderRadius.md,
     backgroundColor: colors.surfaceAlt,
-    alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
+    alignItems: 'center',
   },
   filterButtonActive: {
     backgroundColor: colors.primary,
-    borderColor: colors.primary,
   },
-  filterBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: colors.danger,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  filterBadgeText: {
-    color: colors.textInverse,
-    fontSize: 11,
-    fontWeight: '700' as const,
-  },
-  activeFiltersContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
-  },
-  activeFiltersContent: {
-    gap: spacing.sm,
-    paddingRight: spacing.sm,
-  },
-  activeTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.infoLight,
-    paddingVertical: 6,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.sm,
-    borderRadius: borderRadius.full,
-    gap: spacing.xs,
-  },
-  activeTagText: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: colors.primary,
-    maxWidth: 120,
-  },
-  clearAllButton: {
-    paddingHorizontal: spacing.sm,
-  },
-  clearAllText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: colors.danger,
-  },
-  filtersPanel: {
+  mobileFilterPanel: {
     backgroundColor: colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
-    paddingBottom: spacing.md,
-    ...shadows.md,
-  },
-  filtersContent: {
-  },
-  filtersPanelHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  filtersPanelTitle: {
-    fontSize: 18,
-    fontWeight: '700' as const,
-    color: colors.text,
-  },
-  resetFiltersText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
-    color: colors.primary,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    maxHeight: 400,
   },
   filterSection: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    marginBottom: spacing.lg,
   },
   filterSectionHeader: {
     flexDirection: 'row',
@@ -550,48 +471,37 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   filterSectionTitle: {
-    fontSize: 13,
-    fontWeight: '600' as const,
+    ...typography.subtitle2,
+    fontWeight: '600',
     color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  filterSectionHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginLeft: spacing.xs,
-  },
-  chipsScroll: {
-    gap: spacing.sm,
-    paddingRight: spacing.lg,
+  chipsContainer: {
+    marginHorizontal: -spacing.md,
+    paddingHorizontal: spacing.md,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.full,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
     borderColor: colors.border,
     gap: spacing.xs,
-  },
-  chipIcon: {
-    marginRight: 2,
+    marginRight: spacing.sm,
   },
   chipText: {
-    fontSize: 14,
-    fontWeight: '500' as const,
+    ...typography.body3,
+    fontWeight: '500',
     color: colors.text,
-    maxWidth: 140,
   },
   chipTextSelected: {
     color: colors.textInverse,
   },
-  chipCheck: {
-    marginLeft: 2,
-  },
-  statusChipsContainer: {
+  statusGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
@@ -599,11 +509,16 @@ const styles = StyleSheet.create({
   statusChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: borderRadius.full,
-    borderWidth: 1.5,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    flex: 0.48,
     gap: spacing.xs,
+  },
+  statusChipSelected: {
+    borderColor: colors.primary,
   },
   statusDot: {
     width: 8,
@@ -611,40 +526,71 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   statusChipText: {
-    fontSize: 14,
-    fontWeight: '600' as const,
+    ...typography.body3,
+    fontWeight: '600',
   },
-  noDataText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontStyle: 'italic',
-  },
-  applyButton: {
-    marginHorizontal: spacing.lg,
-    marginTop: spacing.md,
-    backgroundColor: colors.primary,
-    paddingVertical: 14,
+  clearButton: {
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
     borderRadius: borderRadius.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  applyButtonText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
-    color: colors.textInverse,
-  },
-  resultsHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.background,
-  },
-  resultsCount: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    color: colors.textMuted,
+  clearButtonText: {
+    ...typography.body3,
+    fontWeight: '600',
+    color: colors.textSecondary,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.sm,
     paddingBottom: spacing.lg,
-    flexGrow: 1,
+    gap: spacing.sm,
+  },
+  assetCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  assetCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  assetName: {
+    ...typography.subtitle2,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+  },
+  assetDetails: {
+    gap: spacing.xs,
+  },
+  detailLabel: {
+    ...typography.body3,
+    color: colors.textMuted,
+  },
+  detailValue: {
+    color: colors.text,
+    fontWeight: '600',
+  },
+  mobileFooter: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  resultsCountText: {
+    ...typography.body3,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
 });

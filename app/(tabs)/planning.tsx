@@ -1,24 +1,25 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, SectionList, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, CalendarDays } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, Calendar } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
-import { EcheanceListItem } from '@/components/ListItem';
+import { DataTable, type Column } from '@/components/DataTable';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { assetControlRepository } from '@/repositories/ControlRepository';
 import { DueEcheance } from '@/types';
 
 type FilterType = 'all' | 'overdue' | 'week' | 'month';
 
-interface Section {
-  title: string;
-  data: DueEcheance[];
-  color: string;
+interface TimelineItem extends DueEcheance {
+  section: string;
+  sectionColor: string;
 }
 
 export default function PlanningScreen() {
   const router = useRouter();
+  const isDesktop = useIsDesktop();
   const [filter, setFilter] = useState<FilterType>('all');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -44,215 +45,254 @@ export default function PlanningScreen() {
     setRefreshing(false);
   }, [refetch]);
 
-  const sections: Section[] = React.useMemo(() => {
+  const timelineData = useMemo(() => {
     if (!echeances) return [];
 
+    const items: TimelineItem[] = [];
     const overdue = echeances.filter(e => e.is_overdue);
     const thisWeek = echeances.filter(e => !e.is_overdue && e.days_remaining <= 7);
     const thisMonth = echeances.filter(e => !e.is_overdue && e.days_remaining > 7 && e.days_remaining <= 30);
     const later = echeances.filter(e => !e.is_overdue && e.days_remaining > 30);
 
-    const result: Section[] = [];
-    
     if (overdue.length > 0) {
-      result.push({ title: 'En retard', data: overdue, color: colors.danger });
+      items.push(...overdue.map(e => ({ ...e, section: 'En retard', sectionColor: colors.danger })));
     }
     if (thisWeek.length > 0) {
-      result.push({ title: 'Cette semaine', data: thisWeek, color: colors.warning });
+      items.push(...thisWeek.map(e => ({ ...e, section: 'Cette semaine', sectionColor: colors.warning })));
     }
     if (thisMonth.length > 0) {
-      result.push({ title: 'Ce mois', data: thisMonth, color: colors.info });
+      items.push(...thisMonth.map(e => ({ ...e, section: 'Ce mois', sectionColor: colors.info })));
     }
     if (later.length > 0) {
-      result.push({ title: 'Plus tard', data: later, color: colors.textMuted });
+      items.push(...later.map(e => ({ ...e, section: 'Plus tard', sectionColor: colors.textMuted })));
     }
 
-    return result;
+    return items;
   }, [echeances]);
 
-  const chronologicalEvents = useMemo(() => {
-    if (!echeances) return [];
-    return [...echeances].sort((a, b) => {
-      const dateA = new Date(a.next_due_at).getTime();
-      const dateB = new Date(b.next_due_at).getTime();
-      return dateA - dateB;
-    });
-  }, [echeances]);
-
-  const groupedByDate = useMemo(() => {
-    const groups: { [key: string]: DueEcheance[] } = {};
-    chronologicalEvents.forEach(event => {
-      const date = new Date(event.next_due_at);
-      const key = date.toISOString().split('T')[0];
-      if (!groups[key]) {
-        groups[key] = [];
-      }
-      groups[key].push(event);
-    });
-    return groups;
-  }, [chronologicalEvents]);
-
-  const formatDateHeader = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return "Aujourd'hui";
-    }
-    if (date.toDateString() === tomorrow.toDateString()) {
-      return 'Demain';
-    }
-    
-    return date.toLocaleDateString('fr-FR', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
-    });
+  const handleRowPress = (item: TimelineItem) => {
+    router.push(`/asset/${item.asset_id}`);
   };
-
-  const getEventColor = (event: DueEcheance) => {
-    if (event.is_overdue) return colors.danger;
-    if (event.days_remaining <= 7) return colors.warning;
-    if (event.days_remaining <= 30) return colors.info;
-    return colors.textMuted;
-  };
-
-  const handleEcheancePress = (echeance: DueEcheance) => {
-    router.push(`/asset/${echeance.asset_id}`);
-  };
-
-  const filterOptions: { key: FilterType; label: string }[] = [
-    { key: 'all', label: 'Tout' },
-    { key: 'overdue', label: 'Retard' },
-    { key: 'week', label: '7 jours' },
-    { key: 'month', label: '30 jours' },
-  ];
 
   if (isLoading) {
     return <LoadingState message="Chargement du planning..." />;
   }
 
+  // DESKTOP - TABLE VIEW
+  if (isDesktop) {
+    const tableColumns: Column<TimelineItem>[] = [
+      {
+        key: 'section' as any,
+        title: 'Section',
+        width: 130,
+        render: (value: string, row: TimelineItem) => (
+          <View style={[styles.sectionBadge, { backgroundColor: row.sectionColor + '20', borderColor: row.sectionColor }]}>
+            <Text style={[styles.sectionBadgeText, { color: row.sectionColor }]}>{value}</Text>
+          </View>
+        ),
+      },
+      {
+        key: 'asset_designation',
+        title: 'Équipement',
+        sortable: true,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'control_type_label',
+        title: 'Type de contrôle',
+        width: 180,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'next_due_at',
+        title: 'Échéance',
+        width: 120,
+        sortable: true,
+        render: (value: string) => {
+          const date = new Date(value);
+          return date.toLocaleDateString('fr-FR');
+        },
+      },
+      {
+        key: 'days_remaining' as any,
+        title: 'Jours',
+        width: 80,
+        align: 'center',
+        render: (value: number, row: TimelineItem) => (
+          <View style={[styles.daysBadge, { backgroundColor: row.is_overdue ? colors.danger + '20' : colors.warning + '20' }]}>
+            <Text style={[styles.daysBadgeText, { color: row.is_overdue ? colors.danger : colors.warning }]}>
+              {row.is_overdue ? `${Math.abs(value)}j retard` : `${value}j`}
+            </Text>
+          </View>
+        ),
+      },
+      {
+        key: 'site_name',
+        title: 'Site',
+        width: 150,
+        render: (value) => value || '-',
+      },
+      
+    ];
+
+    return (
+      <View style={styles.container}>
+        {/* Filter Tabs */}
+        <View style={styles.desktopFilterTabs}>
+          {(['all', 'overdue', 'week', 'month'] as const).map((filterOption) => {
+            const labels = {
+              all: 'Tout',
+              overdue: 'En retard',
+              week: 'Cette semaine',
+              month: 'Ce mois',
+            };
+            return (
+              <TouchableOpacity
+                key={filterOption}
+                style={[
+                  styles.filterTab,
+                  filter === filterOption && styles.filterTabActive,
+                ]}
+                onPress={() => setFilter(filterOption)}
+              >
+                <Text
+                  style={[
+                    styles.filterTabText,
+                    filter === filterOption && styles.filterTabTextActive,
+                  ]}
+                >
+                  {labels[filterOption]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Table */}
+        <DataTable<TimelineItem>
+          columns={tableColumns}
+          data={timelineData}
+          onRowPress={handleRowPress}
+          loading={isLoading}
+        />
+
+        {/* Footer */}
+        <View style={styles.desktopFooter}>
+          <Text style={styles.countText}>{timelineData.length} contrôle{timelineData.length !== 1 ? 's' : ''}</Text>
+        </View>
+      </View>
+    );
+  }
+
+  // MOBILE - TIMELINE VIEW
   return (
     <View style={styles.container}>
-      <View style={styles.filterTabs}>
-        {filterOptions.map((option) => (
-          <TouchableOpacity
-            key={option.key}
-            style={[styles.filterTab, filter === option.key && styles.filterTabActive]}
-            onPress={() => setFilter(option.key)}
-          >
-            <Text style={[styles.filterTabText, filter === option.key && styles.filterTabTextActive]}>
-              {option.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {/* Filter Pills */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.mobileFilterPills}
+        scrollEnabled={true}
+      >
+        {(['all', 'overdue', 'week', 'month'] as const).map((filterOption) => {
+          const labels = {
+            all: 'Tout',
+            overdue: '🔴 Retard',
+            week: '🟡 Semaine',
+            month: '🔵 Mois',
+          };
+          return (
+            <TouchableOpacity
+              key={filterOption}
+              style={[
+                styles.filterPill,
+                filter === filterOption && styles.filterPillActive,
+              ]}
+              onPress={() => setFilter(filterOption)}
+            >
+              <Text
+                style={[
+                  styles.filterPillText,
+                  filter === filterOption && styles.filterPillTextActive,
+                ]}
+              >
+                {labels[filterOption]}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
-      {filter === 'all' ? (
-        <FlatList
-          data={Object.keys(groupedByDate).sort()}
-          keyExtractor={(item) => item}
-          renderItem={({ item: dateKey }) => (
-            <View style={styles.calendarDay}>
-              <View style={styles.calendarDateHeader}>
-                <View style={styles.calendarDateBadge}>
-                  <Text style={styles.calendarDateDay}>
-                    {new Date(dateKey).getDate()}
-                  </Text>
-                  <Text style={styles.calendarDateMonth}>
-                    {new Date(dateKey).toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase()}
-                  </Text>
+      {/* Timeline */}
+      <FlatList
+        data={timelineData}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item, index }) => {
+          const isFirstInSection = index === 0 || timelineData[index - 1]?.section !== item.section;
+          const isLastInSection =
+            index === timelineData.length - 1 || timelineData[index + 1]?.section !== item.section;
+
+          return (
+            <View>
+              {isFirstInSection && (
+                <View style={[styles.sectionHeader, { borderLeftColor: item.sectionColor }]}>
+                  <Text style={styles.sectionHeaderText}>{item.section}</Text>
                 </View>
-                <View style={styles.calendarDateInfo}>
-                  <Text style={styles.calendarDateTitle}>{formatDateHeader(dateKey)}</Text>
-                  <Text style={styles.calendarDateCount}>
-                    {groupedByDate[dateKey].length} échéance{groupedByDate[dateKey].length > 1 ? 's' : ''}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.calendarEvents}>
-                {groupedByDate[dateKey].map((event) => (
-                  <TouchableOpacity
-                    key={event.id}
-                    style={styles.calendarEvent}
-                    onPress={() => handleEcheancePress(event)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.calendarEventIndicator, { backgroundColor: getEventColor(event) }]} />
-                    <View style={styles.calendarEventContent}>
-                      <Text style={styles.calendarEventTitle} numberOfLines={1}>
-                        {event.asset_code} - {event.asset_designation}
+              )}
+
+              <TouchableOpacity
+                style={[
+                  styles.timelineCard,
+                  { borderLeftColor: item.sectionColor },
+                  isLastInSection && styles.timelineCardLast,
+                ]}
+                onPress={() => handleRowPress(item)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.timelineContent}>
+                  <View style={styles.timelineTop}>
+                    <Text style={styles.assetName} numberOfLines={1}>
+                      {item.asset_designation}
+                    </Text>
+                    <View style={[styles.daysBadgeMobile, { backgroundColor: item.is_overdue ? colors.danger + '20' : colors.warning + '20' }]}>
+                      <Text style={[styles.daysBadgeTextMobile, { color: item.is_overdue ? colors.danger : colors.warning }]}>
+                        {item.is_overdue ? `${Math.abs(item.days_remaining)}j retard` : `${item.days_remaining}j`}
                       </Text>
-                      <Text style={styles.calendarEventSubtitle} numberOfLines={1}>
-                        {event.control_type_label}
-                      </Text>
-                      <View style={styles.calendarEventMeta}>
-                        <Text style={styles.calendarEventSite}>{event.site_name}</Text>
-                        {event.is_overdue && (
-                          <View style={styles.overdueTag}>
-                            <AlertTriangle size={10} color={colors.danger} />
-                            <Text style={styles.overdueTagText}>En retard</Text>
-                          </View>
-                        )}
-                      </View>
                     </View>
-                    <CalendarDays size={18} color={colors.textMuted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
+                  </View>
+
+                  <Text style={styles.controlType} numberOfLines={1}>
+                    {item.control_type_label}
+                  </Text>
+
+                  <View style={styles.timelineFooter}>
+                    <Text style={styles.siteText}>{item.site_name}</Text>
+                    <Text style={styles.dateText}>
+                      {new Date(item.next_due_at).toLocaleDateString('fr-FR')}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.timelineChevron}>
+                  <Text style={styles.chevronText}>›</Text>
+                </View>
+              </TouchableOpacity>
             </View>
-          )}
-          contentContainerStyle={styles.calendarContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon={<CheckCircle size={48} color={colors.success} />}
-              title="Aucune échéance"
-              message="Tous les contrôles sont à jour"
-            />
-          }
-        />
-      ) : (
-        <SectionList
-          sections={sections}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <EcheanceListItem
-              assetCode={item.asset_code}
-              assetDesignation={item.asset_designation}
-              controlTypeLabel={item.control_type_label}
-              daysRemaining={item.days_remaining}
-              isOverdue={item.is_overdue}
-              siteName={item.site_name}
-              onPress={() => handleEcheancePress(item)}
-            />
-          )}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <View style={[styles.sectionIndicator, { backgroundColor: section.color }]} />
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              <Text style={styles.sectionCount}>{section.data.length}</Text>
-            </View>
-          )}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon={<CheckCircle size={48} color={colors.success} />}
-              title="Aucune échéance"
-              message="Tous les contrôles sont à jour"
-            />
-          }
-          stickySectionHeadersEnabled={false}
-        />
-      )}
+          );
+        }}
+        contentContainerStyle={styles.timelineList}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        ListEmptyComponent={
+          <EmptyState
+            title="Aucun contrôle planifié"
+            message="Aucune échéance pour cette période"
+          />
+        }
+      />
+
+      <View style={styles.mobileFooter}>
+        <Text style={styles.countText}>{timelineData.length} contrôle{timelineData.length !== 1 ? 's' : ''}</Text>
+      </View>
     </View>
   );
 }
@@ -262,171 +302,191 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  filterTabs: {
+
+  // DESKTOP STYLES
+  desktopFilterTabs: {
     flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.sm,
     backgroundColor: colors.surface,
-    borderBottomWidth: 1,
+    borderBottomWidth: 2,
     borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
   },
   filterTab: {
-    flex: 1,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    borderRadius: borderRadius.md,
-    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
   },
   filterTabActive: {
-    backgroundColor: colors.primary,
+    borderBottomColor: colors.primary,
   },
   filterTabText: {
-    fontSize: typography.bodySmall.fontSize,
-    fontWeight: '500' as const,
-    color: colors.textSecondary,
+    ...typography.subtitle2,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
   filterTabTextActive: {
-    color: colors.textInverse,
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  desktopFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  sectionBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  sectionBadgeText: {
+    ...typography.body3,
+    fontWeight: '600',
+  },
+  daysBadge: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  daysBadgeText: {
+    ...typography.body3,
+    fontWeight: '600',
   },
 
-  listContent: {
-    padding: spacing.lg,
-    flexGrow: 1,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  sectionIndicator: {
-    width: 4,
-    height: 20,
-    borderRadius: 2,
-    marginRight: spacing.md,
-  },
-  sectionTitle: {
-    ...typography.h3,
-    color: colors.text,
-    flex: 1,
-  },
-  sectionCount: {
-    fontSize: typography.bodySmall.fontSize,
-    fontWeight: '600' as const,
-    color: colors.textMuted,
-    backgroundColor: colors.surfaceAlt,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
-  },
-  calendarContent: {
-    padding: spacing.md,
-    flexGrow: 1,
-  },
-  calendarDay: {
-    marginBottom: spacing.lg,
-  },
-  calendarDateHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  calendarDateBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: borderRadius.md,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.md,
-  },
-  calendarDateDay: {
-    fontSize: 20,
-    fontWeight: '700' as const,
-    color: colors.textInverse,
-    lineHeight: 24,
-  },
-  calendarDateMonth: {
-    fontSize: 10,
-    fontWeight: '600' as const,
-    color: colors.textInverse,
-    opacity: 0.9,
-  },
-  calendarDateInfo: {
-    flex: 1,
-  },
-  calendarDateTitle: {
-    fontSize: typography.body.fontSize,
-    fontWeight: '600' as const,
-    color: colors.text,
-    textTransform: 'capitalize',
-  },
-  calendarDateCount: {
-    fontSize: typography.caption.fontSize,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  calendarEvents: {
-    marginLeft: 26,
-    borderLeftWidth: 2,
-    borderLeftColor: colors.border,
-    paddingLeft: spacing.lg,
-  },
-  calendarEvent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: borderRadius.md,
-    padding: spacing.md,
-    marginBottom: spacing.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  calendarEventIndicator: {
-    width: 4,
-    height: '100%',
-    minHeight: 40,
-    borderRadius: 2,
-    marginRight: spacing.md,
-  },
-  calendarEventContent: {
-    flex: 1,
-  },
-  calendarEventTitle: {
-    fontSize: typography.body.fontSize,
-    fontWeight: '600' as const,
-    color: colors.text,
-    marginBottom: 2,
-  },
-  calendarEventSubtitle: {
-    fontSize: typography.bodySmall.fontSize,
-    color: colors.textSecondary,
-    marginBottom: 4,
-  },
-  calendarEventMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // MOBILE STYLES
+  mobileFilterPills: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  calendarEventSite: {
-    fontSize: typography.caption.fontSize,
-    color: colors.textMuted,
+  filterPill: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  overdueTag: {
+  filterPillActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  filterPillText: {
+    ...typography.body3,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  filterPillTextActive: {
+    color: colors.textInverse,
+  },
+  sectionHeader: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    backgroundColor: colors.surface,
+    borderLeftWidth: 4,
+    borderLeftColor: colors.primary,
+  },
+  sectionHeaderText: {
+    ...typography.subtitle2,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  timelineList: {
+    paddingBottom: spacing.lg,
+  },
+  timelineCard: {
+    marginHorizontal: spacing.md,
+    marginVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderLeftWidth: 4,
+    borderRadius: borderRadius.md,
+    borderRightWidth: 1,
+    borderRightColor: colors.border,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.dangerLight,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+    gap: spacing.md,
   },
-  overdueTagText: {
-    fontSize: 10,
-    fontWeight: '600' as const,
-    color: colors.danger,
+  timelineCardLast: {
+    marginBottom: spacing.sm,
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  assetName: {
+    ...typography.subtitle2,
+    fontWeight: '700',
+    color: colors.text,
+    flex: 1,
+  },
+  daysBadgeMobile: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.sm,
+    alignSelf: 'flex-start',
+  },
+  daysBadgeTextMobile: {
+    ...typography.body4,
+    fontWeight: '700',
+  },
+  controlType: {
+    ...typography.body3,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  timelineFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  siteText: {
+    ...typography.body4,
+    color: colors.textMuted,
+  },
+  dateText: {
+    ...typography.body3,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  timelineChevron: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  chevronText: {
+    fontSize: 24,
+    color: colors.primary,
+    fontWeight: 'bold',
+  },
+  mobileFooter: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  countText: {
+    ...typography.body3,
+    color: colors.textMuted,
+    fontWeight: '500',
   },
 });

@@ -36,6 +36,12 @@ interface Technician {
   role: string;
 }
 
+function normalizeList<T>(value: any): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && Array.isArray((value as any).json)) return (value as any).json as T[];
+  return [];
+}
+
 export default function AddMaintenanceScreen() {
   const { assetId: preselectedAssetId } = useLocalSearchParams<{ assetId?: string }>();
   const router = useRouter();
@@ -78,11 +84,13 @@ export default function AddMaintenanceScreen() {
     enabled: !!preselectedAssetId,
   });
 
-  const { data: technicians } = trpc.auth.listTechnicians.useQuery(undefined, {
+  const { data: techniciansRaw } = trpc.auth.listTechnicians.useQuery(undefined, {
     enabled: isManagerOrAdmin,
   });
 
-  const selectedTechnician = technicians?.find(t => t.id === selectedTechnicianId);
+  const technicians = React.useMemo(() => normalizeList<Technician>(techniciansRaw), [techniciansRaw]);
+
+  const selectedTechnician = technicians.find(t => t.id === selectedTechnicianId);
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -109,7 +117,7 @@ export default function AddMaintenanceScreen() {
       queryClient.invalidateQueries({ queryKey: ['technician-interventions'] });
 
       const assetInfo = selectedAsset || assets?.find(a => a.id === data.assetId);
-      const technicianInfo = technicians?.find(t => t.id === data.assignedTo);
+      const technicianInfo = technicians.find(t => t.id === data.assignedTo);
 
       if (data.assignedTo && technicianInfo && assetInfo) {
         const calendarData = generateCalendarInviteData({
@@ -275,7 +283,7 @@ export default function AddMaintenanceScreen() {
                 name="assignedTo"
                 render={({ field: { onChange, value } }) => (
                   <View style={styles.technicianSection}>
-                    {technicians?.map((tech) => (
+                    {technicians.map((tech) => (
                       <TouchableOpacity
                         key={tech.id}
                         style={[
@@ -306,7 +314,7 @@ export default function AddMaintenanceScreen() {
                         )}
                       </TouchableOpacity>
                     ))}
-                    {(!technicians || technicians.length === 0) && (
+                    {technicians.length === 0 && (
                       <Text style={styles.noTechnicians}>Aucun technicien disponible</Text>
                     )}
                   </View>

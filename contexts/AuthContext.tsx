@@ -4,7 +4,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { trpcClient } from '@/lib/trpc';
+import { trpcClient, setTrpcAuthToken } from '@/lib/trpc';
 
 const STORAGE_KEY = 'inspectra_auth';
 
@@ -72,6 +72,28 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const loadStoredAuth = async () => {
     console.log('[AUTH] Loading stored auth...');
     const stored = await getStoredAuth();
+
+    if (stored?.token) {
+      try {
+        setTrpcAuthToken(stored.token);
+        const me = await trpcClient.auth.me.query();
+        if (me) {
+          const user: User = {
+            id: me.id,
+            email: me.email,
+            name: me.name,
+            role: me.role as UserRole,
+            token_mock: stored.token,
+            created_at: new Date().toISOString(),
+          };
+          console.log('[AUTH] Restored session from backend token for:', user.email);
+          setState({ user, isLoading: false, isAuthenticated: true });
+          return;
+        }
+      } catch (e) {
+        console.warn('[AUTH] Failed to restore via backend token, falling back to local store');
+      }
+    }
     
     if (stored?.user?.id) {
       console.log('[AUTH] Restored session for:', stored.user.email);
@@ -101,21 +123,27 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         timeoutPromise,
       ]);
 
-      if (!result?.user) {
-        console.log('[AUTH] Backend returned no user');
+      // tRPC on web can wrap the response as { json: { user, token } }
+      const payload: any = (result as any)?.json ?? result;
+      const userResult = payload?.user;
+      const tokenResult = payload?.token;
+
+      if (!userResult) {
+        console.log('[AUTH] Backend returned no user', payload);
         return false;
       }
-      
+
       const user: User = {
-        id: result.user.id,
-        email: result.user.email,
-        name: result.user.name,
-        role: result.user.role as UserRole,
-        token_mock: result.token,
+        id: userResult.id,
+        email: userResult.email,
+        name: userResult.name,
+        role: userResult.role as UserRole,
+        token_mock: tokenResult,
         created_at: new Date().toISOString(),
       };
-      
-      await setStoredAuth({ user, token: result.token });
+
+      await setStoredAuth({ user, token: tokenResult });
+      setTrpcAuthToken(tokenResult);
       setState({ user, isLoading: false, isAuthenticated: true });
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
       return true;
@@ -129,6 +157,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logout = useCallback(async () => {
     console.log('[AUTH] Logging out');
     await setStoredAuth(null);
+    setTrpcAuthToken(null);
     setState({ user: null, isLoading: false, isAuthenticated: false });
   }, []);
 

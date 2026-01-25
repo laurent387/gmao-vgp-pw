@@ -1,0 +1,15 @@
+        site_id        |      zone_id      
+-----------------------+-------------------
+ site_arkema_lacq      | zone_ark_l_chimie
+ site_michelin_ladoux  | zone_mich_l_rnd
+ site_michelin_troyes  | zone_mich_t_prod
+ site_po_compiegne     | zone_po_c_mont
+ site_po_sigmaringen   | zone_po_s_prod
+ site_psa_rennes       | zone_psa_r_prod
+ site_psa_sochaux      | zone_psa_s_log
+ site_rt_venissieux    | zone_rt_v_log
+ site_safran_colomiers | zone_saf_col_ass
+ site_se_carros        | zone_se_c_elect
+ site_valeo_angers     | zone_val_a_prod
+(11 rows)
+

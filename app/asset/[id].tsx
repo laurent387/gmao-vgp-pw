@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Switch } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -10,6 +10,7 @@ import { colors, spacing, borderRadius, typography, shadows } from '@/constants/
 import { StatusBadge, OverdueBadge, CriticalityBadge } from '@/components/Badge';
 import { Card, SectionCard } from '@/components/Card';
 import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { assetRepository } from '@/repositories/AssetRepository';
 import { assetControlRepository } from '@/repositories/ControlRepository';
@@ -17,7 +18,7 @@ import { reportRepository } from '@/repositories/ReportRepository';
 import { ncRepository } from '@/repositories/NCRepository';
 import { maintenanceRepository } from '@/repositories/MaintenanceRepository';
 import { Asset, AssetControl, Report, NonConformity, MaintenanceLog, Document } from '@/types';
-import { DocumentList } from '@/components/DocumentPicker';
+import { AttachmentManager } from '@/components/AttachmentManager';
 import { useAuth } from '@/contexts/AuthContext';
 
 type TabType = 'info' | 'controls' | 'actions' | 'maintenance' | 'documents';
@@ -25,9 +26,14 @@ type TabType = 'info' | 'controls' | 'actions' | 'maintenance' | 'documents';
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isReadOnly } = useAuth();
+  const { isReadOnly, canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [refreshing, setRefreshing] = useState(false);
+  const [loadAttachments, setLoadAttachments] = useState(false);
+  const [vgpEnabled, setVgpEnabled] = useState(false);
+  const [vgpValidity, setVgpValidity] = useState('');
+  const [vgpError, setVgpError] = useState<string | null>(null);
+  const [vgpSaving, setVgpSaving] = useState(false);
 
   const { data: asset, isLoading, refetch } = useQuery<Asset | null>({
     queryKey: ['asset', id],
@@ -63,6 +69,46 @@ export default function AssetDetailScreen() {
     setRefreshing(true);
     await refetch();
     setRefreshing(false);
+  };
+
+  useEffect(() => {
+    if (!asset) return;
+    setVgpEnabled(Boolean(asset.vgp_enabled));
+    setVgpValidity(asset.vgp_validity_months ? String(asset.vgp_validity_months) : '');
+  }, [asset]);
+
+  const handleSaveVgp = async () => {
+    if (!asset) return;
+    setVgpError(null);
+
+    if (vgpEnabled) {
+      const validityNumber = Number(vgpValidity);
+      if (!validityNumber || validityNumber <= 0) {
+        setVgpError('La période de validité est requise et doit être > 0');
+        return;
+      }
+      if (!asset.categorie) {
+        setVgpError("Le type d'équipement est requis pour la VGP");
+        return;
+      }
+
+      setVgpSaving(true);
+      await assetRepository.update(asset.id, {
+        vgp_enabled: true,
+        vgp_validity_months: validityNumber,
+      } as any);
+      setVgpSaving(false);
+      await refetch();
+      return;
+    }
+
+    setVgpSaving(true);
+    await assetRepository.update(asset.id, {
+      vgp_enabled: false,
+      vgp_validity_months: null,
+    } as any);
+    setVgpSaving(false);
+    await refetch();
   };
 
   if (isLoading) {
@@ -164,6 +210,78 @@ export default function AssetDetailScreen() {
           </View>
         )}
       </SectionCard>
+
+      <SectionCard title="VGP">
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>VGP</Text>
+          <Text style={styles.infoValue}>{asset.vgp_enabled ? 'Oui' : 'Non'}</Text>
+        </View>
+        {asset.vgp_enabled && (
+          <>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Type</Text>
+              <Text style={styles.infoValue}>{asset.categorie || '-'}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Validité</Text>
+              <Text style={styles.infoValue}>
+                {asset.vgp_validity_months ? `${asset.vgp_validity_months} mois` : '-'}
+              </Text>
+            </View>
+          </>
+        )}
+
+        {canEdit() && (
+          <View style={styles.vgpEditor}>
+            <View style={styles.vgpToggleRow}>
+              <Text style={styles.vgpToggleLabel}>Soumis à VGP ?</Text>
+              <Switch value={vgpEnabled} onValueChange={setVgpEnabled} />
+            </View>
+
+            {vgpEnabled && (
+              <>
+                <View style={styles.vgpPresetRow}>
+                  {[3, 6, 12, 24].map((value) => (
+                    <TouchableOpacity
+                      key={value}
+                      style={[
+                        styles.vgpPreset,
+                        vgpValidity === String(value) && styles.vgpPresetActive,
+                      ]}
+                      onPress={() => setVgpValidity(String(value))}
+                    >
+                      <Text
+                        style={[
+                          styles.vgpPresetText,
+                          vgpValidity === String(value) && styles.vgpPresetTextActive,
+                        ]}
+                      >
+                        {value} mois
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Input
+                  label="Autre (mois)"
+                  value={vgpValidity}
+                  onChangeText={setVgpValidity}
+                  keyboardType="numeric"
+                />
+              </>
+            )}
+
+            {vgpError && <Text style={styles.vgpError}>{vgpError}</Text>}
+
+            <Button
+              title="Enregistrer la configuration VGP"
+              onPress={handleSaveVgp}
+              loading={vgpSaving}
+              disabled={vgpSaving}
+              size="sm"
+            />
+          </View>
+        )}
+      </SectionCard>
     </View>
   );
 
@@ -260,13 +378,32 @@ export default function AssetDetailScreen() {
 
   const renderDocumentsTab = () => (
     <View style={styles.tabContent}>
-      <SectionCard title="Photos & Documents">
-        <DocumentList
-          entityType="asset"
-          entityId={id!}
-          readOnly={isReadOnly()}
+      {!loadAttachments ? (
+        <SectionCard title="Photos & Documents">
+          <View style={styles.quickLoadCard}>
+            <Text style={styles.quickLoadTitle}>Galerie non chargée</Text>
+            <Text style={styles.quickLoadSubtitle}>
+              Pour accélérer l'affichage, la galerie se charge à la demande.
+            </Text>
+            <Button
+              title="Charger la galerie"
+              onPress={() => setLoadAttachments(true)}
+              variant="primary"
+            />
+          </View>
+        </SectionCard>
+      ) : (
+        <AttachmentManager
+          ownerType="EQUIPMENT"
+          ownerId={id!}
+          showPlateSection={true}
+          showCategories={['DOCUMENTATION', 'CERTIFICAT_LEGAL', 'PHOTO', 'AUTRE']}
+          allowedFileTypes={['IMAGE', 'PDF']}
+          onAttachmentChange={() => {
+            // Optionally refetch asset data if needed
+          }}
         />
-      </SectionCard>
+      )}
     </View>
   );
 
@@ -438,6 +575,23 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.lg,
   },
+  quickLoadCard: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    padding: spacing.lg,
+    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  quickLoadTitle: {
+    ...typography.subtitle2,
+    color: colors.text,
+    fontWeight: '700' as const,
+  },
+  quickLoadSubtitle: {
+    ...typography.body3,
+    color: colors.textSecondary,
+  },
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -454,6 +608,49 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySmall.fontSize,
     fontWeight: '500' as const,
     color: colors.text,
+  },
+  vgpEditor: {
+    marginTop: spacing.md,
+    gap: spacing.md,
+  },
+  vgpToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  vgpToggleLabel: {
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+    fontWeight: '600' as const,
+  },
+  vgpPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  vgpPreset: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  vgpPresetActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  vgpPresetText: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.text,
+    fontWeight: '600' as const,
+  },
+  vgpPresetTextActive: {
+    color: colors.textInverse,
+  },
+  vgpError: {
+    fontSize: typography.caption.fontSize,
+    color: colors.danger,
   },
   dueDateContainer: {
     flexDirection: 'row',

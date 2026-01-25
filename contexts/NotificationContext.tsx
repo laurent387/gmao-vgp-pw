@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 
 const NOTIFICATIONS_KEY = 'inspectra_notifications';
@@ -68,6 +69,11 @@ export const [NotificationProvider, useNotifications] = createContextHook(() => 
   const registerForPushNotifications = async () => {
     if (Platform.OS === 'web') {
       console.log('[NOTIFICATIONS] Push notifications not supported on web');
+      return;
+    }
+
+    if ((Constants as any)?.appOwnership === 'expo') {
+      console.log('[NOTIFICATIONS] Expo Go detected - push notifications not supported');
       return;
     }
 

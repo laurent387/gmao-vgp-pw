@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
@@ -13,24 +14,49 @@ interface DbUser {
 
 export const authRouter = createTRPCRouter({
   login: publicProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-        password: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
-      console.log("[AUTH] Login attempt for:", input.email);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const raw = (input ?? {}) as any;
+      const body = (ctx as any)?.rawJson ?? {};
+      console.log("[AUTH] Raw login input:", raw);
+      if (body && Object.keys(body).length > 0) {
+        console.log("[AUTH] Raw request JSON:", body);
+      }
+
+      // Accept multiple shapes (plain, {json}, batched {0:{json}})
+      const email =
+        raw.email ??
+        raw.json?.email ??
+        raw[0]?.email ??
+        raw[0]?.json?.email ??
+        body?.email ??
+        body?.json?.email ??
+        body?.[0]?.email ??
+        body?.[0]?.json?.email;
+      const password =
+        raw.password ??
+        raw.json?.password ??
+        raw[0]?.password ??
+        raw[0]?.json?.password ??
+        body?.password ??
+        body?.json?.password ??
+        body?.[0]?.password ??
+        body?.[0]?.json?.password;
+      if (!email || typeof email !== "string") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Email requis" });
+      }
+
+      console.log("[AUTH] Login attempt for:", email);
       
       const users = await pgQuery<DbUser>(
         "SELECT * FROM users WHERE LOWER(email) = LOWER($1)",
-        [input.email]
+        [email]
       );
 
       const user = users[0];
       if (!user) {
-        console.log("[AUTH] User not found:", input.email);
-        throw new Error("Identifiants incorrects");
+        console.log("[AUTH] User not found:", email);
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Identifiants incorrects" });
       }
 
       const token = `token-${user.id}-${Date.now()}`;

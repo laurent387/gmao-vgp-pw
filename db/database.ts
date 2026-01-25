@@ -62,6 +62,8 @@ export async function initializeDatabase(): Promise<void> {
       modele TEXT,
       numero_serie TEXT,
       annee INTEGER,
+      vgp_enabled INTEGER NOT NULL DEFAULT 0,
+      vgp_validity_months INTEGER,
       statut TEXT NOT NULL DEFAULT 'EN_SERVICE',
       criticite INTEGER NOT NULL DEFAULT 3,
       site_id TEXT NOT NULL,
@@ -227,6 +229,18 @@ export async function initializeDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_actions_due ON corrective_actions(due_at, status);
     CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
   `);
+
+  // Add VGP columns for existing databases (ignore errors if already present)
+  try {
+    await database.execAsync(`ALTER TABLE assets ADD COLUMN vgp_enabled INTEGER NOT NULL DEFAULT 0;`);
+  } catch (e) {
+    // ignore
+  }
+  try {
+    await database.execAsync(`ALTER TABLE assets ADD COLUMN vgp_validity_months INTEGER;`);
+  } catch (e) {
+    // ignore
+  }
   
   console.log('[DB] Tables created successfully');
 }

@@ -1,10 +1,26 @@
 import { trpcClient } from '@/lib/trpc';
-import { Asset, Site, Zone, Mission, NonConformity, CorrectiveAction, ControlType } from '@/types';
+import { Asset, Site, Zone, Mission, NonConformity, CorrectiveAction, ControlType, Client } from '@/types';
 import { AssetFilters } from '@/repositories/AssetRepository';
 import { MissionFilters } from '@/repositories/MissionRepository';
 import { NCFilters } from '@/repositories/NCRepository';
 
 class WebApiService {
+  async updateAsset(id: string, data: Partial<Asset>): Promise<Asset | null> {
+    console.log('[WebAPI] Updating asset:', id, data);
+    try {
+      const updated = await trpcClient.assets.update.mutate({ id, data });
+      const result = (updated as any)?.json ?? updated;
+      return result as Asset | null;
+    } catch (e) {
+      console.error('[WebAPI] Error updating asset:', e);
+      return null;
+    }
+  }
+  private normalizeList<T>(value: unknown): T[] {
+    const list = (value as any)?.json ?? value;
+    return Array.isArray(list) ? (list as T[]) : [];
+  }
+
   async getAssets(filters?: AssetFilters): Promise<Asset[]> {
     console.log('[WebAPI] Fetching assets with filters:', filters);
     try {
@@ -15,8 +31,10 @@ class WebApiService {
         category: filters?.categorie,
         search: filters?.search,
       });
-      console.log('[WebAPI] Fetched', assets.length, 'assets');
-      return assets as Asset[];
+      console.log('[WebAPI] Raw assets response:', assets);
+      const list = this.normalizeList<Asset>(assets);
+      console.log('[WebAPI] Fetched', list.length, 'assets');
+      return list;
     } catch (e) {
       console.error('[WebAPI] Error fetching assets:', e);
       return [];
@@ -27,7 +45,9 @@ class WebApiService {
     console.log('[WebAPI] Fetching asset by id:', id);
     try {
       const asset = await trpcClient.assets.getById.query({ id });
-      return asset as Asset | null;
+      const result = (asset as any)?.json ?? asset;
+      console.log('[WebAPI] Fetched asset:', result);
+      return result as Asset | null;
     } catch (e) {
       console.error('[WebAPI] Error fetching asset:', e);
       return null;
@@ -37,7 +57,10 @@ class WebApiService {
   async getAssetCategories(): Promise<string[]> {
     console.log('[WebAPI] Fetching asset categories');
     try {
-      return await trpcClient.assets.categories.query();
+      const res = await trpcClient.assets.categories.query();
+      const list = this.normalizeList<string>(res);
+      console.log('[WebAPI] Fetched categories:', list.length);
+      return list;
     } catch (e) {
       console.error('[WebAPI] Error fetching categories:', e);
       return [];
@@ -48,9 +71,24 @@ class WebApiService {
     console.log('[WebAPI] Fetching sites');
     try {
       const sites = await trpcClient.sites.list.query();
-      return sites as Site[];
+      const list = this.normalizeList<Site>(sites);
+      console.log('[WebAPI] Fetched sites:', list.length);
+      return list;
     } catch (e) {
       console.error('[WebAPI] Error fetching sites:', e);
+      return [];
+    }
+  }
+
+  async getClients(): Promise<Client[]> {
+    console.log('[WebAPI] Fetching clients');
+    try {
+      const res = await trpcClient.sites.clients.query();
+      const list = this.normalizeList<Client>(res);
+      console.log('[WebAPI] Fetched clients:', list.length);
+      return list;
+    } catch (e) {
+      console.error('[WebAPI] Error fetching clients:', e);
       return [];
     }
   }
@@ -70,7 +108,7 @@ class WebApiService {
     console.log('[WebAPI] Fetching zones for site:', siteId);
     try {
       const zones = await trpcClient.sites.zones.query({ siteId });
-      return zones as Zone[];
+      return this.normalizeList<Zone>(zones);
     } catch (e) {
       console.error('[WebAPI] Error fetching zones:', e);
       return [];
@@ -85,7 +123,7 @@ class WebApiService {
         status: filters?.status,
         assignedTo: filters?.assignedTo,
       });
-      return missions as Mission[];
+      return this.normalizeList<Mission>(missions);
     } catch (e) {
       console.error('[WebAPI] Error fetching missions:', e);
       return [];
@@ -96,10 +134,12 @@ class WebApiService {
     console.log('[WebAPI] Fetching mission by id:', id);
     try {
       const mission = await trpcClient.missions.getById.query({ id });
-      if (!mission) return null;
+      const result = (mission as any)?.json ?? mission;
+      if (!result) return null;
       
       const assets = await trpcClient.missions.getAssets.query({ missionId: id });
-      return { ...mission, assets } as Mission;
+      const assetsList = (assets as any)?.json ?? assets;
+      return { ...result, assets: assetsList } as Mission;
     } catch (e) {
       console.error('[WebAPI] Error fetching mission:', e);
       return null;
@@ -110,7 +150,7 @@ class WebApiService {
     console.log('[WebAPI] Fetching mission assets:', missionId);
     try {
       const assets = await trpcClient.missions.getAssets.query({ missionId });
-      return assets as Asset[];
+      return this.normalizeList<Asset>(assets);
     } catch (e) {
       console.error('[WebAPI] Error fetching mission assets:', e);
       return [];
@@ -148,7 +188,9 @@ class WebApiService {
         assetId: filters?.assetId,
         severity: filters?.severity,
       });
-      return ncs as NonConformity[];
+      const list = (ncs as any)?.json ?? ncs;
+      console.log('[WebAPI] Fetched NCs:', Array.isArray(list) ? list.length : 'undefined');
+      return (list as NonConformity[]) || [];
     } catch (e) {
       console.error('[WebAPI] Error fetching NCs:', e);
       return [];
@@ -217,7 +259,9 @@ class WebApiService {
     console.log('[WebAPI] Fetching control types');
     try {
       const types = await trpcClient.controls.types.query();
-      return types as ControlType[];
+      const list = (types as any)?.json ?? types;
+      console.log('[WebAPI] Fetched control types:', Array.isArray(list) ? list.length : 'undefined');
+      return (list as ControlType[]) || [];
     } catch (e) {
       console.error('[WebAPI] Error fetching control types:', e);
       return [];
@@ -227,7 +271,10 @@ class WebApiService {
   async getDueEcheances(filters?: { siteId?: string; overdueOnly?: boolean; dueSoonDays?: number }) {
     console.log('[WebAPI] Fetching due echeances:', filters);
     try {
-      return await trpcClient.controls.dueEcheances.query(filters);
+      const res = await trpcClient.controls.dueEcheances.query(filters);
+      const list = (res as any)?.json ?? res;
+      console.log('[WebAPI] Fetched echeances:', Array.isArray(list) ? list.length : 'undefined');
+      return list;
     } catch (e) {
       console.error('[WebAPI] Error fetching due echeances:', e);
       return [];

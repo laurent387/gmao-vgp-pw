@@ -8,6 +8,7 @@ interface DbSite {
   name: string;
   address: string | null;
   created_at: string;
+  client_name?: string | null;
 }
 
 interface DbZone {
@@ -16,39 +17,68 @@ interface DbZone {
   name: string;
 }
 
+interface DbClient {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
 }
 
 export const sitesRouter = createTRPCRouter({
+  clients: publicProcedure.query(async () => {
+    console.log("[SITES] Fetching clients from database");
+    const clients = await pgQuery<DbClient>(
+      "SELECT id, name, created_at FROM clients ORDER BY name"
+    );
+    console.log("[SITES] Found clients:", clients.length);
+    return clients.map((c) => ({
+      id: c.id,
+      name: c.name,
+      created_at: c.created_at,
+    }));
+  }),
+
   list: publicProcedure.query(async () => {
     console.log("[SITES] Fetching all sites from database");
-    const sites = await pgQuery<DbSite>(
-      "SELECT * FROM sites ORDER BY name"
+    const sites = await pgQuery<DbSite & { client_name: string | null }>(
+      `SELECT s.*, c.name as client_name
+       FROM sites s
+       LEFT JOIN clients c ON s.client_id = c.id
+       ORDER BY c.name, s.name`
     );
     console.log("[SITES] Found sites:", sites.length);
     return sites.map((s) => ({
       id: s.id,
+      client_id: s.client_id,
       name: s.name,
       address: s.address || "",
       created_at: s.created_at,
+      client_name: s.client_name || "",
     }));
   }),
 
   getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      const sites = await pgQuery<DbSite>(
-        "SELECT * FROM sites WHERE id = $1",
+      const sites = await pgQuery<DbSite & { client_name: string | null }>(
+        `SELECT s.*, c.name as client_name
+         FROM sites s
+         LEFT JOIN clients c ON s.client_id = c.id
+         WHERE s.id = $1`,
         [input.id]
       );
       const site = sites[0];
       if (!site) return null;
       return {
         id: site.id,
+        client_id: site.client_id,
         name: site.name,
         address: site.address || "",
         created_at: site.created_at,
+        client_name: site.client_name || "",
       };
     }),
 
@@ -81,6 +111,7 @@ export const sitesRouter = createTRPCRouter({
   create: protectedProcedure
     .input(
       z.object({
+        clientId: z.string().min(1),
         name: z.string().min(1),
         address: z.string().optional(),
       })
@@ -90,12 +121,13 @@ export const sitesRouter = createTRPCRouter({
       const now = new Date().toISOString();
       
       await pgQuery(
-        "INSERT INTO sites (id, name, address, created_at) VALUES ($1, $2, $3, $4)",
-        [id, input.name, input.address || null, now]
+        "INSERT INTO sites (id, client_id, name, address, created_at) VALUES ($1, $2, $3, $4, $5)",
+        [id, input.clientId, input.name, input.address || null, now]
       );
 
       return {
         id,
+        client_id: input.clientId,
         name: input.name,
         address: input.address || "",
         created_at: now,

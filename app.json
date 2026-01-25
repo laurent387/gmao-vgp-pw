@@ -1,28 +1,35 @@
 {
   "expo": {
-    "name": "In-Spectra Asset & Control",
+    "name": "In-Spectra",
     "slug": "in-spectra-asset-control",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "rork-app",
+    "scheme": "inspectra",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0066CC"
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "app.rork.in-spectra-asset-control"
+      "bundleIdentifier": "com.inspectra.app"
     },
     "android": {
+      "package": "com.inspectra.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0066CC"
       },
-      "package": "app.rork.in_spectra_asset_control"
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.VIBRATE"
+      ]
     },
     "web": {
       "favicon": "./assets/images/favicon.png"
@@ -41,6 +48,14 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://rork.com/"
+      },
+      "eas": {
+        "projectId": "68f8dd0d-834b-49f1-bf76-9a0b591a777a"
+      }
     }
   }
 }

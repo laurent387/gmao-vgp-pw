@@ -8,6 +8,7 @@ import path from "path";
 import { getPgPool } from "./db/postgres";
 import { appRouter } from "./trpc/app-router";
 import { createContext } from "./trpc/create-context";
+import { storageService, ALLOWED_MIME_TYPES, FILE_SIZE_LIMITS } from "./services/storage";
 
 const app = new Hono();
 
@@ -163,8 +164,240 @@ app.get('/uploads/:name', async (c) => {
 
   try {
     const buf = await readFile(diskPath);
-    const contentType = safeName.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const contentType = safeName.endsWith('.png') ? 'image/png' : safeName.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg';
     return new Response(buf as unknown as BodyInit, { headers: { 'Content-Type': contentType, 'Cache-Control': 'public, max-age=31536000' } });
+  } catch {
+    return c.json({ error: 'Not found' }, 404);
+  }
+});
+
+// =============================================
+// ATTACHMENTS UPLOAD ENDPOINT (Documents & Media)
+// =============================================
+
+interface AttachmentUser {
+  id: string;
+  role: string;
+}
+
+async function getAuthUser(authHeader: string | null): Promise<AttachmentUser | null> {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  const token = authHeader.replace('Bearer ', '');
+  
+  try {
+    const pool = getPgPool();
+    let result;
+    
+    if (token.startsWith("token-")) {
+      const userId = token.split("-")[1];
+      if (userId) {
+        result = await pool.query("SELECT id, role FROM users WHERE id = $1", [userId]);
+      }
+    }
+    
+    if (!result?.rows[0]) {
+      result = await pool.query("SELECT id, role FROM users WHERE token_mock = $1", [token]);
+    }
+    
+    return result?.rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
+app.post('/api/attachments/upload', async (c) => {
+  const user = await getAuthUser(c.req.header('authorization') ?? null);
+  if (!user) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  try {
+    const form = await c.req.formData();
+    const ownerType = String(form.get('ownerType') ?? '');
+    const ownerId = String(form.get('ownerId') ?? '');
+    const category = String(form.get('category') ?? 'AUTRE');
+    const title = String(form.get('title') ?? '');
+    const isPrivate = form.get('isPrivate') === 'true';
+    const file = form.get('file');
+
+    if (!ownerType || !ownerId) {
+      return c.json({ error: 'Missing ownerType or ownerId' }, 400);
+    }
+    if (!(file instanceof File)) {
+      return c.json({ error: 'Missing file' }, 400);
+    }
+    if (!title) {
+      return c.json({ error: 'Missing title' }, 400);
+    }
+
+    const mimeType = file.type || 'application/octet-stream';
+    const fileType = storageService.getFileTypeFromMime(mimeType);
+    
+    if (!fileType) {
+      return c.json({ 
+        error: `Type de fichier non supporté: ${mimeType}. Types acceptés: PDF, JPEG, PNG` 
+      }, 400);
+    }
+
+    // Validate file size
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const validation = storageService.validateFile(mimeType, buffer.length, fileType);
+    
+    if (!validation.valid) {
+      return c.json({ error: validation.error }, 400);
+    }
+
+    // Check admin permission for certain operations
+    if (ownerType === 'REPORT' && category === 'RAPPORT') {
+      if (!['ADMIN', 'HSE_MANAGER'].includes(user.role)) {
+        return c.json({ error: 'Seuls les administrateurs peuvent importer des PDFs de rapport' }, 403);
+      }
+    }
+
+    // Generate storage key and store file
+    await storageService.init();
+    const fileId = randomUUID();
+    const ext = storageService.getExtensionFromMime(mimeType);
+    const storageKey = storageService.generateStorageKey(ownerType, ownerId, category, fileId, ext);
+    
+    const result = await storageService.putObject(buffer, storageKey, mimeType);
+
+    // Create attachment record
+    const attachmentId = 'att_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    const now = new Date().toISOString();
+    const pool = getPgPool();
+
+    await pool.query(
+      `INSERT INTO attachments (
+        id, owner_type, owner_id, file_type, category, title,
+        original_file_name, mime_type, size_bytes, storage_key,
+        is_private, checksum, status, version_number, parent_id,
+        created_at, created_by, updated_at, updated_by, archived_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+      [
+        attachmentId,
+        ownerType,
+        ownerId,
+        fileType,
+        category,
+        title,
+        file.name || 'unknown',
+        mimeType,
+        result.sizeBytes,
+        storageKey,
+        isPrivate,
+        result.checksum,
+        'ACTIVE',
+        1,
+        null,
+        now,
+        user.id,
+        now,
+        null,
+        null,
+      ]
+    );
+
+    console.log('[ATTACHMENT] Uploaded:', {
+      id: attachmentId,
+      ownerType,
+      ownerId,
+      category,
+      fileType,
+      size: result.sizeBytes,
+    });
+
+    return c.json({
+      id: attachmentId,
+      storageKey,
+      downloadUrl: storageService.getSignedUrl(storageKey),
+      sizeBytes: result.sizeBytes,
+      checksum: result.checksum,
+    });
+  } catch (e) {
+    console.error('[ATTACHMENT] Upload error:', e);
+    return c.json({ error: e instanceof Error ? e.message : 'Upload failed' }, 500);
+  }
+});
+
+// Download attachment with signed URL validation
+app.get('/api/attachments/download/:storageKey{.+}', async (c) => {
+  const user = await getAuthUser(c.req.header('authorization') ?? null);
+  // Allow public downloads for non-private files
+  
+  const storageKey = decodeURIComponent(c.req.param('storageKey'));
+  
+  try {
+    const pool = getPgPool();
+    const result = await pool.query(
+      'SELECT * FROM attachments WHERE storage_key = $1 AND status = $2',
+      [storageKey, 'ACTIVE']
+    );
+    
+    const attachment = result.rows[0];
+    if (!attachment) {
+      return c.json({ error: 'Attachment not found' }, 404);
+    }
+
+    // Check access for private attachments
+    if (attachment.is_private) {
+      if (!user || !['ADMIN', 'HSE_MANAGER'].includes(user.role)) {
+        return c.json({ error: 'Access denied' }, 403);
+      }
+    }
+
+    const buffer = await storageService.getObject(storageKey);
+    if (!buffer) {
+      return c.json({ error: 'File not found on storage' }, 404);
+    }
+
+    const fileName = attachment.original_file_name || 'download';
+    const contentDisposition = attachment.mime_type === 'application/pdf' 
+      ? `inline; filename="${fileName}"` 
+      : `attachment; filename="${fileName}"`;
+
+    return new Response(buffer as unknown as BodyInit, {
+      headers: {
+        'Content-Type': attachment.mime_type,
+        'Content-Disposition': contentDisposition,
+        'Content-Length': String(buffer.length),
+        'Cache-Control': 'private, max-age=3600',
+      },
+    });
+  } catch (e) {
+    console.error('[ATTACHMENT] Download error:', e);
+    return c.json({ error: 'Download failed' }, 500);
+  }
+});
+
+// Serve static uploads directory with improved MIME detection
+app.get('/uploads/*', async (c) => {
+  const filePath = c.req.path.replace('/uploads/', '');
+  const safePath = filePath.replace(/\.\./g, '');
+  const diskPath = path.join(process.cwd(), 'uploads', safePath);
+
+  try {
+    const buf = await readFile(diskPath);
+    
+    // Determine content type from extension
+    const ext = path.extname(safePath).toLowerCase();
+    const mimeTypes: Record<string, string> = {
+      '.pdf': 'application/pdf',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.webp': 'image/webp',
+      '.heic': 'image/heic',
+    };
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+    return new Response(buf as unknown as BodyInit, {
+      headers: {
+        'Content-Type': contentType,
+        'Cache-Control': 'public, max-age=31536000',
+      },
+    });
   } catch {
     return c.json({ error: 'Not found' }, 404);
   }

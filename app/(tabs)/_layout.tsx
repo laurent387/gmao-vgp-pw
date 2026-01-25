@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Platform } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings, FileCheck } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -91,6 +91,13 @@ export default function TabLayout() {
         options={{
           title: 'NC & Actions',
           tabBarIcon: ({ color, size }) => <AlertTriangle size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="vgp"
+        options={{
+          title: 'VGP Presses',
+          tabBarIcon: ({ color, size }) => <FileCheck size={size} color={color} />,
         }}
       />
       <Tabs.Screen

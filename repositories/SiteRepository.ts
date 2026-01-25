@@ -9,6 +9,13 @@ export class ClientRepository extends BaseRepository<Client> {
     super('clients');
   }
 
+  async getAll(): Promise<Client[]> {
+    if (Platform.OS === 'web') {
+      return webApiService.getClients();
+    }
+    return super.getAll();
+  }
+
   async create(client: Omit<Client, 'id' | 'created_at'>): Promise<string> {
     if (Platform.OS === 'web') return '';
 

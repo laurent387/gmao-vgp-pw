@@ -144,6 +144,11 @@ server {
         proxy_pass http://in_spectra_api/api/trpc;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
+    - Attachments (Documents & Médias):
+        - Upload: `POST /api/attachments/upload` (Bearer token obligatoire, vérifie rôle pour PDF de rapport)
+        - Download (signed/local): `GET /api/attachments/download/<storageKey>` (private => admin/HSE seulement)
+        - Stockage local: répertoire `uploads/` (configurable via `UPLOADS_DIR`)
+        - Limites: PDF ≤ 20MB, Image ≤ 8MB ; MIME autorisés: pdf, jpeg, png, webp, heic/heif
         proxy_set_header Connection 'upgrade';
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
@@ -288,6 +293,9 @@ curl https://api.in-spectra.com/
 curl -X POST https://api.in-spectra.com/api/trpc/auth.login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"test"}'
+
+# List clients (tRPC)
+curl https://api.in-spectra.com/api/trpc/sites.clients
 ```
 
 ### View Logs

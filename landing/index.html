@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>In-Spectra | GMAO et VGP simplifiées</title>
+  <style>
+    :root {
+      --bg: #0c1a1f;
+      --card: #10242c;
+      --muted: #7fa6b4;
+      --text: #e8f2f7;
+      --accent: #4ad7b8;
+      --accent-2: #1b8b73;
+      --shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(120% 120% at 20% 20%, rgba(74,215,184,0.08), transparent),
+                  radial-gradient(100% 100% at 80% 0%, rgba(26,120,103,0.08), transparent),
+                  var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 32px 20px 60px;
+    }
+    header { max-width: 1200px; margin: 0 auto 32px auto; display: flex; justify-content: space-between; align-items: center; }
+    .logo { font-weight: 700; letter-spacing: 0.6px; font-size: 20px; color: var(--accent); }
+    nav a { color: var(--muted); margin-left: 18px; text-decoration: none; font-weight: 600; }
+    nav a:hover { color: var(--accent); }
+    .hero { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; align-items: center; }
+    .badge { display: inline-flex; align-items: center; gap: 8px; background: rgba(74,215,184,0.12); color: var(--accent); padding: 8px 12px; border-radius: 999px; font-weight: 600; font-size: 13px; }
+    h1 { font-size: clamp(32px, 6vw, 48px); letter-spacing: -0.5px; margin: 16px 0 12px; }
+    .subtitle { color: var(--muted); font-size: 18px; margin-bottom: 22px; max-width: 640px; }
+    .cta { display: inline-flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease, border 0.15s ease;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #031312; box-shadow: var(--shadow); }
+    .btn-primary:hover { transform: translateY(-2px); }
+    .btn-ghost { border: 1px solid rgba(255,255,255,0.12); color: var(--text); background: rgba(255,255,255,0.03); }
+    .btn-ghost:hover { border-color: rgba(74,215,184,0.5); color: var(--accent); }
+    .card {
+      background: var(--card);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+    }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-top: 28px; }
+    .metric { display: flex; flex-direction: column; gap: 6px; }
+    .metric h3 { font-size: 16px; color: var(--muted); }
+    .metric strong { font-size: 22px; }
+    .section { max-width: 1200px; margin: 60px auto 0; padding: 0 4px; }
+    .section h2 { font-size: 28px; margin-bottom: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: rgba(255,255,255,0.04); border-radius: 10px; font-weight: 600; }
+    .features { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .feature h3 { margin-bottom: 6px; }
+    .feature p { color: var(--muted); }
+    .testimonial { display: grid; grid-template-columns: 1fr; gap: 12px; }
+    .quote { font-size: 18px; color: var(--text); }
+    .quote small { color: var(--muted); }
+    footer { max-width: 1200px; margin: 60px auto 0; display: flex; justify-content: space-between; align-items: center; color: var(--muted); font-size: 14px; flex-wrap: wrap; gap: 12px; }
+    @media (max-width: 640px) {
+      header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      nav { display: flex; flex-wrap: wrap; gap: 10px; }
+      .cta { width: 100%; }
+      .btn { width: 100%; text-align: center; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">In-Spectra</div>
+    <nav>
+      <a href="#features">Fonctionnalités</a>
+      <a href="#ops">Opérations</a>
+      <a href="#temoignages">Avis clients</a>
+      <a href="#cta">Essayer</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <div class="badge">GMAO + VGP, en temps réel</div>
+      <h1>Planifiez, exécutez et tracez vos contrôles critiques sans friction.</h1>
+      <p class="subtitle">In-Spectra centralise vos équipements, missions, VGP et rapports dans une plateforme unique : consignez les preuves, synchronisez vos équipes terrain, réduisez les arrêts et passez vos audits sans stress.</p>
+      <div class="cta" id="cta">
+        <a class="btn btn-primary" href="https://app.in-spectra.com" target="_blank" rel="noreferrer">Ouvrir l'application</a>
+        <a class="btn btn-ghost" href="#features">Voir les capacités</a>
+        <a class="btn btn-ghost" href="/in-spectra.apk" download>📱 Télécharger l'APK Android</a>
+      </div>
+      <div class="grid" style="margin-top:24px;">
+        <div class="metric">
+          <h3>Disponibilité</h3>
+          <strong>99.9%</strong>
+          <p class="subtitle" style="font-size:14px; color:var(--muted);">API et synchronisation terrain</p>
+        </div>
+        <div class="metric">
+          <h3>Temps gagné</h3>
+          <strong>-35%</strong>
+          <p class="subtitle" style="font-size:14px; color:var(--muted);">sur la planification et le reporting</p>
+        </div>
+        <div class="metric">
+          <h3>Traçabilité</h3>
+          <strong>100%</strong>
+          <p class="subtitle" style="font-size:14px; color:var(--muted);">preuves photo + signatures</p>
+        </div>
+      </div>
+    </div>
+    <div class="card" aria-label="aperçu produit">
+      <div class="pill" style="margin-bottom:12px;">Tableau de bord en temps réel</div>
+      <h3 style="margin-bottom:8px;">Missions à exécuter</h3>
+      <div class="grid" style="grid-template-columns: 1fr;">
+        <div class="card" style="background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-weight:700;">VGP Presse plieuse</div>
+          <div style="color:var(--muted); font-size:14px;">Atelier Presses · échéance J+3</div>
+        </div>
+        <div class="card" style="background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-weight:700;">Préventif Injection 320T</div>
+          <div style="color:var(--muted); font-size:14px;">Atelier Injection · échéance J+7</div>
+        </div>
+        <div class="card" style="background: rgba(255,255,255,0.02); border:1px solid rgba(255,255,255,0.06);">
+          <div style="font-weight:700;">VGP Chariot 3T</div>
+          <div style="color:var(--muted); font-size:14px;">Maintenance · échéance J+15</div>
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; gap:10px; align-items:center;">
+        <span class="pill" style="background: rgba(74,215,184,0.12); color: var(--accent);">Alertes automatisées</span>
+        <span class="pill">Exports PDF</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="features">
+    <h2>Tout ce qu’il faut pour la conformité et la maintenance</h2>
+    <div class="grid features">
+      <div class="card feature">
+        <h3>VGP et contrôles critiques</h3>
+        <p>Périodicités, relances, preuves, signatures : tout est tracé et exportable.</p>
+      </div>
+      <div class="card feature">
+        <h3>Inventaire unifié</h3>
+        <p>Sites, zones, machines, documents et photos — une seule source de vérité.</p>
+      </div>
+      <div class="card feature">
+        <h3>Planification dynamique</h3>
+        <p>Calendrier partagé, affectation des missions, notifications web et mobile.</p>
+      </div>
+      <div class="card feature">
+        <h3>Rapports instantanés</h3>
+        <p>PDF prêts pour l’audit, synthèses terrain, suivi des non-conformités.</p>
+      </div>
+      <div class="card feature">
+        <h3>Offline natif</h3>
+        <p>Les techniciens travaillent sans réseau, les données se resynchronisent ensuite.</p>
+      </div>
+      <div class="card feature">
+        <h3>API sécurisée</h3>
+        <p>Backend Hono + tRPC, Postgres, authentification et journaux d’audit.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="ops">
+    <h2>Pour les opérations terrain</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="pill" style="margin-bottom:10px;">Techniciens</div>
+        <p>Checklists guidées, photos, commentaires, signatures. Navigation claire, mode sombre, synchronisation automatique.</p>
+      </div>
+      <div class="card">
+        <div class="pill" style="margin-bottom:10px;">Responsables HSE</div>
+        <p>Vision des risques, échéances VGP, plans d’actions, exports pour inspections internes et clients finaux.</p>
+      </div>
+      <div class="card">
+        <div class="pill" style="margin-bottom:10px;">Direction</div>
+        <p>Suivi des coûts, disponibilité des actifs, conformité permanente, historique consolidé.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="temoignages">
+    <h2>Ils passent leurs audits sans stress</h2>
+    <div class="card testimonial">
+      <p class="quote">“En moins de deux semaines, nos VGP presses et chariots étaient planifiées et tracées. Les photos et signatures intégrées ont simplifié nos audits clients.”</p>
+      <small>Responsable Maintenance, PME industrielle</small>
+    </div>
+  </section>
+
+  <section class="section" style="margin-top:50px;">
+    <div class="card" style="display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between;">
+      <div>
+        <h2 style="margin-bottom:6px;">Prêt à lancer vos contrôles ?</h2>
+        <p style="color:var(--muted);">Centralisez vos VGP, vos missions et vos rapports sur In-Spectra.</p>
+      </div>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://app.in-spectra.com" target="_blank" rel="noreferrer">Ouvrir l'application</a>
+        <a class="btn btn-ghost" href="https://api.in-spectra.com/api/health" target="_blank" rel="noreferrer">Voir statut API</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>© In-Spectra. Conçu pour la maintenance, la sécurité et la conformité.</span>
+    <span>API : api.in-spectra.com · App : app.in-spectra.com</span>
+  </footer>
+</body>
+</html>

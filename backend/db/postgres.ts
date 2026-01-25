@@ -84,6 +84,8 @@ export async function ensurePgSchema(): Promise<void> {
       modele TEXT,
       numero_serie TEXT,
       annee INTEGER,
+      vgp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      vgp_validity_months INTEGER,
       statut TEXT NOT NULL DEFAULT 'EN_SERVICE',
       criticite INTEGER NOT NULL DEFAULT 3,
       site_id TEXT NOT NULL REFERENCES sites(id) ON DELETE RESTRICT,
@@ -230,6 +232,37 @@ export async function ensurePgSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_reports_performed ON reports(performed_at);
     CREATE INDEX IF NOT EXISTS idx_actions_due ON corrective_actions(due_at, status);
     CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox(status);
+
+    -- =============================================
+    -- ATTACHMENTS TABLE (Documents & Media Module)
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS attachments (
+      id TEXT PRIMARY KEY,
+      owner_type TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      file_type TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      original_file_name TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL DEFAULT 0,
+      storage_key TEXT NOT NULL,
+      is_private BOOLEAN NOT NULL DEFAULT FALSE,
+      checksum TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
+      version_number INTEGER NOT NULL DEFAULT 1,
+      parent_id TEXT REFERENCES attachments(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL,
+      created_by TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      updated_at TIMESTAMPTZ NOT NULL,
+      updated_by TEXT REFERENCES users(id) ON DELETE SET NULL,
+      archived_at TIMESTAMPTZ
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attachments_owner ON attachments(owner_type, owner_id);
+    CREATE INDEX IF NOT EXISTS idx_attachments_category ON attachments(category);
+    CREATE INDEX IF NOT EXISTS idx_attachments_status ON attachments(status);
+    CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments(parent_id);
   `;
 
   console.log("[PG] Ensuring schema...");

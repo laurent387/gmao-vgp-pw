@@ -1,4 +1,6 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
 
@@ -80,8 +82,42 @@ export const missionsRouter = createTRPCRouter({
     }),
 
   getById: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const raw = (input ?? {}) as any;
+      const body = (ctx as any)?.rawJson ?? {};
+      const url = new URL(ctx.req.url);
+      let queryInput: any = null;
+      const queryParam = url.searchParams.get("input");
+      if (queryParam) {
+        try {
+          queryInput = JSON.parse(queryParam);
+        } catch (e) {
+          console.warn("[MISSIONS] Unable to parse query input", e);
+        }
+      }
+
+      const id =
+        (typeof raw === "string" ? raw : undefined) ??
+        raw.id ??
+        raw.json?.id ??
+        raw[0]?.id ??
+        raw[0]?.json?.id ??
+        body.id ??
+        body.json?.id ??
+        body?.[0]?.id ??
+        body?.[0]?.json?.id ??
+        queryInput?.id ??
+        queryInput?.json?.id ??
+        queryInput?.[0]?.id ??
+        queryInput?.[0]?.json?.id;
+
+      console.log("[MISSIONS] getById input:", { id, raw, body, queryInput });
+
+      if (!id || typeof id !== "string") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Mission id is required" });
+      }
+
       const missions = await pgQuery<DbMission & { asset_count: string }>(
         `SELECT m.*, 
                 ct.label as control_type_label,
@@ -93,7 +129,7 @@ export const missionsRouter = createTRPCRouter({
          LEFT JOIN sites s ON m.site_id = s.id
          LEFT JOIN users u ON m.assigned_to = u.id
          WHERE m.id = $1`,
-        [input.id]
+        [id]
       );
 
       const m = missions[0];
@@ -180,8 +216,40 @@ export const missionsRouter = createTRPCRouter({
     }),
 
   getAssets: publicProcedure
-    .input(z.object({ missionId: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const raw = (input ?? {}) as any;
+      const body = (ctx as any)?.rawJson ?? {};
+      const url = new URL(ctx.req.url);
+      let queryInput: any = null;
+      const queryParam = url.searchParams.get("input");
+      if (queryParam) {
+        try {
+          queryInput = JSON.parse(queryParam);
+        } catch (e) {
+          console.warn("[MISSIONS] Unable to parse query input", e);
+        }
+      }
+
+      const missionId =
+        (typeof raw === "string" ? raw : undefined) ??
+        raw.missionId ??
+        raw.json?.missionId ??
+        raw[0]?.missionId ??
+        raw[0]?.json?.missionId ??
+        body.missionId ??
+        body.json?.missionId ??
+        body?.[0]?.missionId ??
+        body?.[0]?.json?.missionId ??
+        queryInput?.missionId ??
+        queryInput?.json?.missionId ??
+        queryInput?.[0]?.missionId ??
+        queryInput?.[0]?.json?.missionId;
+
+      if (!missionId || typeof missionId !== "string") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "missionId requis" });
+      }
+
       const assets = await pgQuery<any>(
         `SELECT a.*, s.name as site_name, z.name as zone_name
          FROM mission_assets ma
@@ -189,7 +257,7 @@ export const missionsRouter = createTRPCRouter({
          LEFT JOIN sites s ON a.site_id = s.id
          LEFT JOIN zones z ON a.zone_id = z.id
          WHERE ma.mission_id = $1`,
-        [input.missionId]
+        [missionId]
       );
 
       return assets;

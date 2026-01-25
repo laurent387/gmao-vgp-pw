@@ -45,6 +45,12 @@ interface ControlType {
   active: boolean;
 }
 
+function normalizeList<T>(value: any): T[] {
+  if (Array.isArray(value)) return value as T[];
+  if (value && Array.isArray((value as any).json)) return (value as any).json as T[];
+  return [];
+}
+
 const ROLE_LABELS: Record<UserRole, string> = {
   ADMIN: 'Administrateur',
   HSE_MANAGER: 'Responsable HSE',
@@ -67,6 +73,11 @@ export default function AdminScreen() {
   const { data: sites, isLoading: loadingSites, refetch: refetchSites } = trpc.admin.listSites.useQuery(undefined, { enabled: isAdmin && activeTab === 'sites' });
   const { data: zones, isLoading: loadingZones, refetch: refetchZones } = trpc.admin.listZones.useQuery(undefined, { enabled: isAdmin && activeTab === 'zones' });
   const { data: controlTypes, isLoading: loadingControls, refetch: refetchControls } = trpc.admin.listControlTypes.useQuery(undefined, { enabled: isAdmin && activeTab === 'controls' });
+
+  const usersList = React.useMemo(() => normalizeList<User>(users), [users]);
+  const sitesList = React.useMemo(() => normalizeList<Site>(sites), [sites]);
+  const zonesList = React.useMemo(() => normalizeList<Zone>(zones), [zones]);
+  const controlTypesList = React.useMemo(() => normalizeList<ControlType>(controlTypes), [controlTypes]);
 
   const createUserMutation = trpc.admin.createUser.useMutation({
     onSuccess: () => {
@@ -245,7 +256,7 @@ export default function AdminScreen() {
           <LoadingState message="Chargement..." />
         ) : (
           <View style={styles.list}>
-            {activeTab === 'users' && users?.map((u: User) => (
+            {activeTab === 'users' && usersList.map((u: User) => (
               <View key={u.id} style={styles.listItem}>
                 <View style={styles.listItemContent}>
                   <Text style={styles.listItemTitle}>{u.name}</Text>
@@ -265,7 +276,7 @@ export default function AdminScreen() {
               </View>
             ))}
 
-            {activeTab === 'sites' && sites?.map((s: Site) => (
+            {activeTab === 'sites' && sitesList.map((s: Site) => (
               <View key={s.id} style={styles.listItem}>
                 <View style={styles.listItemContent}>
                   <Text style={styles.listItemTitle}>{s.name}</Text>
@@ -282,7 +293,7 @@ export default function AdminScreen() {
               </View>
             ))}
 
-            {activeTab === 'zones' && zones?.map((z: Zone) => (
+            {activeTab === 'zones' && zonesList.map((z: Zone) => (
               <View key={z.id} style={styles.listItem}>
                 <View style={styles.listItemContent}>
                   <Text style={styles.listItemTitle}>{z.name}</Text>
@@ -296,7 +307,7 @@ export default function AdminScreen() {
               </View>
             ))}
 
-            {activeTab === 'controls' && controlTypes?.map((ct: ControlType) => (
+            {activeTab === 'controls' && controlTypesList.map((ct: ControlType) => (
               <View key={ct.id} style={[styles.listItem, !ct.active && styles.listItemInactive]}>
                 <View style={styles.listItemContent}>
                   <Text style={styles.listItemTitle}>{ct.label}</Text>
@@ -319,7 +330,7 @@ export default function AdminScreen() {
         onClose={() => setModalVisible(false)}
         type={activeTab}
         editingItem={editingItem}
-        sites={sites || []}
+        sites={sitesList}
         onSaveUser={(data) => editingItem ? updateUserMutation.mutate({ id: editingItem.id, ...data }) : createUserMutation.mutate(data as any)}
         onSaveSite={(data) => editingItem ? updateSiteMutation.mutate({ id: editingItem.id, ...data }) : createSiteMutation.mutate(data as any)}
         onSaveZone={(data) => createZoneMutation.mutate(data as any)}

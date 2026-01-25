@@ -92,11 +92,10 @@ export default function LoginScreen() {
 
           <View style={styles.demoBox}>
             <Text style={styles.demoTitle}>Comptes de démonstration</Text>
-            <Text style={styles.demoCredential}>Technicien: technicien@inspectra.fr</Text>
-            <Text style={styles.demoCredential}>Manager: manager@inspectra.fr</Text>
-            <Text style={styles.demoCredential}>HSE Manager: hse@inspectra.fr</Text>
-            <Text style={styles.demoCredential}>Admin: admin@inspectra.fr</Text>
-            <Text style={styles.demoNote}>(mot de passe: laisser vide)</Text>
+            <Text style={styles.demoCredential}>Technicien: technicien@inspectra.fr / technicien123</Text>
+            <Text style={styles.demoCredential}>HSE Manager: hse@inspectra.fr / hse123</Text>
+            <Text style={styles.demoCredential}>Admin: admin@inspectra.fr / admin123</Text>
+            <Text style={styles.demoCredential}>Auditeur: auditeur@inspectra.fr / auditeur123</Text>
           </View>
 
           <Text style={styles.hint}>

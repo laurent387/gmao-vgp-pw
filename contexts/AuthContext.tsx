@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
 import { userRepository } from '@/repositories/UserRepository';
 import { useDatabase } from '@/contexts/DatabaseContext';
+import { trpcClient } from '@/lib/trpc';
 
 const MOCK_USERS: User[] = [
   {
@@ -59,6 +60,7 @@ interface AuthState {
 
 interface StoredAuth {
   userId: string;
+  token?: string;
 }
 
 async function getStoredAuth(): Promise<StoredAuth | null> {
@@ -134,31 +136,55 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     setState({ user: null, isLoading: false, isAuthenticated: false });
   };
 
-  const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
     console.log('[AUTH] Attempting login for:', email);
     const normalizedEmail = email.toLowerCase().trim();
     
     try {
+      console.log('[AUTH] Calling backend API...');
+      const result = await trpcClient.auth.login.mutate({
+        email: normalizedEmail,
+        password: password || 'demo123',
+      });
+      
+      if (!result?.user) {
+        console.log('[AUTH] Backend returned no user');
+        return false;
+      }
+      
+      const user: User = {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        role: result.user.role as UserRole,
+        token_mock: result.token,
+        created_at: new Date().toISOString(),
+      };
+      
+      await setStoredAuth({ userId: user.id, token: result.token });
+      setState({ user, isLoading: false, isAuthenticated: true });
+      console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
+      return true;
+    } catch (error: any) {
+      console.error('[AUTH] Login error:', error?.message || error);
+      
+      // Fallback to local auth if backend fails
+      console.log('[AUTH] Trying local fallback...');
       let user: User | null = null;
       
       if (Platform.OS === 'web') {
         user = MOCK_USERS.find(u => u.email.toLowerCase() === normalizedEmail) || null;
-        console.log('[AUTH] Web platform - using mock users');
       } else {
         user = await userRepository.getByEmail(normalizedEmail);
       }
       
-      if (!user) {
-        console.log('[AUTH] User not found for email:', email);
-        return false;
+      if (user) {
+        await setStoredAuth({ userId: user.id });
+        setState({ user, isLoading: false, isAuthenticated: true });
+        console.log('[AUTH] Fallback login successful for:', user.email);
+        return true;
       }
       
-      await setStoredAuth({ userId: user.id });
-      setState({ user, isLoading: false, isAuthenticated: true });
-      console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
-      return true;
-    } catch (error) {
-      console.error('[AUTH] Login error:', error);
       return false;
     }
   }, []);

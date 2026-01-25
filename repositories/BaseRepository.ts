@@ -1,5 +1,18 @@
 import { getDatabase } from '@/db/database';
 import { Platform } from 'react-native';
+import { mockAssets, mockSites, mockZones, mockMissions, mockNonConformities, mockCorrectiveActions, mockMaintenanceLogs, mockControlTypes, mockReports } from '@/db/mockData';
+
+const mockDataMap: Record<string, any[]> = {
+  assets: mockAssets,
+  sites: mockSites,
+  zones: mockZones,
+  missions: mockMissions,
+  nonconformities: mockNonConformities,
+  corrective_actions: mockCorrectiveActions,
+  maintenance_logs: mockMaintenanceLogs,
+  control_types: mockControlTypes,
+  reports: mockReports,
+};
 
 export abstract class BaseRepository<T> {
   protected tableName: string;
@@ -9,13 +22,16 @@ export abstract class BaseRepository<T> {
   }
 
   async getAll(): Promise<T[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return (mockDataMap[this.tableName] || []) as T[];
     const db = await getDatabase();
     return db.getAllAsync<T>(`SELECT * FROM ${this.tableName}`);
   }
 
   async getById(id: string): Promise<T | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web') {
+      const data = mockDataMap[this.tableName] || [];
+      return (data.find((item: any) => item.id === id) as T) || null;
+    }
     const db = await getDatabase();
     return db.getFirstAsync<T>(`SELECT * FROM ${this.tableName} WHERE id = ?`, [id]);
   }
@@ -27,7 +43,7 @@ export abstract class BaseRepository<T> {
   }
 
   async count(): Promise<number> {
-    if (Platform.OS === 'web') return 0;
+    if (Platform.OS === 'web') return (mockDataMap[this.tableName] || []).length;
     const db = await getDatabase();
     const result = await db.getFirstAsync<{ count: number }>(`SELECT COUNT(*) as count FROM ${this.tableName}`);
     return result?.count ?? 0;

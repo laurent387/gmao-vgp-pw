@@ -9,6 +9,7 @@ import { ncRouter } from "./routes/nonconformities";
 import { maintenanceRouter } from "./routes/maintenance";
 import { syncRouter } from "./routes/sync";
 import { dashboardRouter } from "./routes/dashboard";
+import { adminRouter } from "./routes/admin";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
@@ -21,6 +22,7 @@ export const appRouter = createTRPCRouter({
   maintenance: maintenanceRouter,
   sync: syncRouter,
   dashboard: dashboardRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

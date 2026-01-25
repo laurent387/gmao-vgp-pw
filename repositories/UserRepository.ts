@@ -2,6 +2,7 @@ import { getDatabase } from '@/db/database';
 import { User, UserRole } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
+import { mockUsers } from '@/db/mockData';
 
 export class UserRepository extends BaseRepository<User> {
   constructor() {
@@ -32,10 +33,21 @@ export class UserRepository extends BaseRepository<User> {
   }
 
   async getTechnicians(): Promise<User[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      return mockUsers.filter(u => ['TECHNICIAN', 'HSE_MANAGER', 'ADMIN'].includes(u.role)) as User[];
+    }
     
     const db = await getDatabase();
     return db.getAllAsync<User>("SELECT * FROM users WHERE role IN ('TECHNICIAN', 'HSE_MANAGER', 'ADMIN')");
+  }
+
+  async getAll(): Promise<User[]> {
+    if (Platform.OS === 'web') {
+      return mockUsers as User[];
+    }
+    
+    const db = await getDatabase();
+    return db.getAllAsync<User>('SELECT * FROM users');
   }
 }
 

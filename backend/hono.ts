@@ -26,6 +26,43 @@ app.get("/", (c) => {
   return c.json({ status: "ok", message: "In-Spectra API is running" });
 });
 
+app.get("/api/health", async (c) => {
+  try {
+    const pool = getPgPool();
+    const result = await pool.query("SELECT NOW() as time, current_database() as db");
+    const row = result.rows[0];
+    
+    const tables = await pool.query(`
+      SELECT table_name FROM information_schema.tables 
+      WHERE table_schema = 'public' ORDER BY table_name
+    `);
+    
+    console.log("[HEALTH] DB connection OK", { time: row.time, db: row.db });
+    
+    return c.json({
+      status: "ok",
+      database: {
+        connected: true,
+        name: row.db,
+        serverTime: row.time,
+        tables: tables.rows.map((t: { table_name: string }) => t.table_name),
+      },
+    });
+  } catch (error) {
+    console.error("[HEALTH] DB connection FAILED", error);
+    return c.json(
+      {
+        status: "error",
+        database: {
+          connected: false,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      },
+      500
+    );
+  }
+});
+
 app.post('/api/uploads', async (c) => {
   const auth = c.req.header('authorization');
   if (!auth?.startsWith('Bearer ')) {

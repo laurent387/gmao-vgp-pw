@@ -128,8 +128,17 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async updateStatus(id: string, status: MissionStatus): Promise<void> {
-    if (Platform.OS === 'web') return;
-    
+    if (Platform.OS === 'web') {
+      const idx = mockMissions.findIndex(m => m.id === id);
+      if (idx >= 0) {
+        (mockMissions[idx] as any).status = status;
+        console.log('[MissionRepository] updateStatus(web)', { id, status });
+      } else {
+        console.log('[MissionRepository] updateStatus(web) mission not found', { id, status });
+      }
+      return;
+    }
+
     const db = await getDatabase();
     await db.runAsync('UPDATE missions SET status = ? WHERE id = ?', [status, id]);
   }

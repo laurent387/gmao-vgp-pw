@@ -2,10 +2,10 @@ import React from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Calendar, MapPin, User, Package, Play, CheckCircle } from 'lucide-react-native';
-import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
+import { Calendar, MapPin, User, Play, CheckCircle } from 'lucide-react-native';
+import { colors, spacing, typography } from '@/constants/theme';
 import { StatusBadge, CriticalityBadge } from '@/components/Badge';
-import { SectionCard, Card } from '@/components/Card';
+import { SectionCard } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { missionRepository } from '@/repositories/MissionRepository';
@@ -17,7 +17,7 @@ export default function MissionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user, canEdit } = useAuth();
+  const { canEdit } = useAuth();
   const [refreshing, setRefreshing] = React.useState(false);
 
   const { data: mission, isLoading, refetch } = useQuery<Mission | null>({

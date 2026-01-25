@@ -2,6 +2,7 @@ import { getDatabase } from '@/db/database';
 import { Site, Zone } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
+import { mockSites, mockZones } from '@/db/mockData';
 
 export class SiteRepository extends BaseRepository<Site> {
   constructor() {
@@ -30,14 +31,19 @@ export class ZoneRepository extends BaseRepository<Zone> {
   }
 
   async getBySiteId(siteId: string): Promise<Zone[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return mockZones.filter(z => z.site_id === siteId);
     
     const db = await getDatabase();
     return db.getAllAsync<Zone>('SELECT * FROM zones WHERE site_id = ?', [siteId]);
   }
 
   async getAllWithSiteName(): Promise<Zone[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      return mockZones.map(z => ({
+        ...z,
+        site_name: mockSites.find(s => s.id === z.site_id)?.name
+      }));
+    }
     
     const db = await getDatabase();
     return db.getAllAsync<Zone>(`

@@ -2,6 +2,7 @@ import { getDatabase } from '@/db/database';
 import { NonConformity, CorrectiveAction, NCStatus, ActionStatus, SeverityLevel } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
+import { mockNonConformities, mockCorrectiveActions } from '@/db/mockData';
 
 export interface NCFilters {
   status?: NCStatus;
@@ -15,7 +16,13 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async getAllWithDetails(filters?: NCFilters): Promise<NonConformity[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      let results = [...mockNonConformities];
+      if (filters?.status) results = results.filter(nc => nc.status === filters.status);
+      if (filters?.assetId) results = results.filter(nc => nc.asset_id === filters.assetId);
+      if (filters?.severity) results = results.filter(nc => nc.severity === filters.severity);
+      return results;
+    }
     
     const db = await getDatabase();
     
@@ -60,7 +67,12 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async getByIdWithAction(id: string): Promise<NonConformity | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web') {
+      const nc = mockNonConformities.find(n => n.id === id);
+      if (!nc) return null;
+      const action = mockCorrectiveActions.find(a => a.nonconformity_id === id);
+      return { ...nc, corrective_action: action };
+    }
     
     const db = await getDatabase();
     
@@ -82,7 +94,7 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async getByAssetId(assetId: string): Promise<NonConformity[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return mockNonConformities.filter(nc => nc.asset_id === assetId);
     
     const db = await getDatabase();
     return db.getAllAsync<NonConformity>(`
@@ -117,7 +129,7 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async getByStatus(status: NCStatus): Promise<NonConformity[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return mockNonConformities.filter(nc => nc.status === status);
     
     const db = await getDatabase();
     return db.getAllAsync<NonConformity>(
@@ -161,7 +173,7 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async getOpenCount(): Promise<number> {
-    if (Platform.OS === 'web') return 0;
+    if (Platform.OS === 'web') return mockNonConformities.filter(nc => nc.status !== 'CLOTUREE').length;
     
     const db = await getDatabase();
     const result = await db.getFirstAsync<{ count: number }>(
@@ -203,7 +215,13 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
   }
 
   async getOverdueCount(): Promise<number> {
-    if (Platform.OS === 'web') return 0;
+    if (Platform.OS === 'web') {
+      const now = new Date();
+      return mockCorrectiveActions.filter(a => 
+        (a.status === 'OUVERTE' || a.status === 'EN_COURS') && 
+        new Date(a.due_at) < now
+      ).length;
+    }
     
     const db = await getDatabase();
     const result = await db.getFirstAsync<{ count: number }>(`
@@ -214,7 +232,7 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
   }
 
   async getByStatus(status: ActionStatus): Promise<CorrectiveAction[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return mockCorrectiveActions.filter(a => a.status === status);
     
     const db = await getDatabase();
     return db.getAllAsync<CorrectiveAction>(

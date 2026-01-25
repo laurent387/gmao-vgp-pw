@@ -1,7 +1,8 @@
 import { getDatabase } from '@/db/database';
-import { Mission, MissionAsset, MissionStatus, Asset } from '@/types';
+import { Mission, MissionStatus, Asset } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
+import { mockMissions, mockAssets } from '@/db/mockData';
 
 export interface MissionFilters {
   siteId?: string;
@@ -15,7 +16,13 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async getAllWithDetails(filters?: MissionFilters): Promise<Mission[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      let results = [...mockMissions];
+      if (filters?.siteId) results = results.filter(m => m.site_id === filters.siteId);
+      if (filters?.status) results = results.filter(m => m.status === filters.status);
+      if (filters?.assignedTo) results = results.filter(m => m.assigned_to === filters.assignedTo);
+      return results.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+    }
     
     const db = await getDatabase();
     
@@ -60,7 +67,12 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async getByIdWithDetails(id: string): Promise<Mission | null> {
-    if (Platform.OS === 'web') return null;
+    if (Platform.OS === 'web') {
+      const mission = mockMissions.find(m => m.id === id);
+      if (!mission) return null;
+      const siteAssets = mockAssets.filter(a => a.site_id === mission.site_id).slice(0, (mission as any).asset_count || 3);
+      return { ...mission, assets: siteAssets };
+    }
     
     const db = await getDatabase();
     
@@ -123,7 +135,7 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async getByStatus(status: MissionStatus): Promise<Mission[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') return mockMissions.filter(m => m.status === status);
     
     const db = await getDatabase();
     return db.getAllAsync<Mission>(
@@ -133,7 +145,11 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async getMissionAssets(missionId: string): Promise<Asset[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      const mission = mockMissions.find(m => m.id === missionId);
+      if (!mission) return [];
+      return mockAssets.filter(a => a.site_id === mission.site_id).slice(0, mission.asset_count || 3);
+    }
     
     const db = await getDatabase();
     return db.getAllAsync<Asset>(`

@@ -110,9 +110,9 @@ export default function ClientSitesScreen() {
   }, []);
 
   const openSite = useCallback(
-    (siteId: string) => {
-      console.log('[CLIENT_SITES] open site', { siteId });
-      router.push({ pathname: '/(tabs)/inventory', params: { siteId } });
+    (siteId: string, clientId: string) => {
+      console.log('[CLIENT_SITES] open site', { siteId, clientId });
+      router.push({ pathname: '/(tabs)/inventory', params: { siteId, clientId } });
     },
     [router]
   );
@@ -160,7 +160,7 @@ export default function ClientSitesScreen() {
             {item.sites.map((site) => (
               <TouchableOpacity
                 key={site.id}
-                onPress={() => openSite(site.id)}
+                onPress={() => openSite(site.id, item.client.id)}
                 activeOpacity={0.7}
                 testID={`site-row-${site.id}`}
                 style={styles.siteRow}

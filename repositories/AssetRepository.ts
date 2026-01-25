@@ -2,9 +2,10 @@ import { getDatabase } from '@/db/database';
 import { Asset, AssetStatus } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockAssets, mockCategories } from '@/db/mockData';
+import { mockAssets, mockCategories, mockSites } from '@/db/mockData';
 
 export interface AssetFilters {
+  clientId?: string;
   siteId?: string;
   zoneId?: string;
   categorie?: string;
@@ -20,6 +21,11 @@ export class AssetRepository extends BaseRepository<Asset> {
   async getAllWithDetails(filters?: AssetFilters): Promise<Asset[]> {
     if (Platform.OS === 'web') {
       let results = [...mockAssets];
+
+      if (filters?.clientId) {
+        const allowedSiteIds = new Set(mockSites.filter(s => s.client_id === filters.clientId).map(s => s.id));
+        results = results.filter(a => allowedSiteIds.has(a.site_id));
+      }
       if (filters?.siteId) results = results.filter(a => a.site_id === filters.siteId);
       if (filters?.zoneId) results = results.filter(a => a.zone_id === filters.zoneId);
       if (filters?.categorie) results = results.filter(a => a.categorie === filters.categorie);
@@ -49,6 +55,11 @@ export class AssetRepository extends BaseRepository<Asset> {
     const conditions: string[] = [];
     const params: any[] = [];
     
+    if (filters?.clientId) {
+      conditions.push('s.client_id = ?');
+      params.push(filters.clientId);
+    }
+
     if (filters?.siteId) {
       conditions.push('a.site_id = ?');
       params.push(filters.siteId);

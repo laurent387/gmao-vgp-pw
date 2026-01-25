@@ -6,6 +6,41 @@ import { User, UserRole } from '@/types';
 import { userRepository } from '@/repositories/UserRepository';
 import { useDatabase } from '@/contexts/DatabaseContext';
 
+const MOCK_USERS: User[] = [
+  {
+    id: 'mock-user-1',
+    email: 'technicien@inspectra.fr',
+    name: 'Jean Dupont',
+    role: 'TECHNICIAN',
+    token_mock: 'mock_token_tech',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mock-user-2',
+    email: 'hse@inspectra.fr',
+    name: 'Marie Martin',
+    role: 'HSE_MANAGER',
+    token_mock: 'mock_token_hse',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mock-user-3',
+    email: 'admin@inspectra.fr',
+    name: 'Admin Système',
+    role: 'ADMIN',
+    token_mock: 'mock_token_admin',
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'mock-user-4',
+    email: 'auditeur@inspectra.fr',
+    name: 'Pierre Auditeur',
+    role: 'AUDITOR',
+    token_mock: 'mock_token_auditor',
+    created_at: new Date().toISOString(),
+  },
+];
+
 const STORAGE_KEY = 'inspectra_auth';
 
 interface AuthState {
@@ -73,7 +108,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     const stored = await getStoredAuth();
     
     if (stored?.userId) {
-      const user = await userRepository.getById(stored.userId);
+      let user: User | null = null;
+      
+      if (Platform.OS === 'web') {
+        user = MOCK_USERS.find(u => u.id === stored.userId) || null;
+      } else {
+        user = await userRepository.getById(stored.userId);
+      }
+      
       if (user) {
         console.log('[AUTH] Restored session for:', user.email);
         setState({ user, isLoading: false, isAuthenticated: true });
@@ -86,9 +128,17 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
   const login = useCallback(async (email: string, _password: string): Promise<boolean> => {
     console.log('[AUTH] Attempting login for:', email);
+    const normalizedEmail = email.toLowerCase().trim();
     
     try {
-      const user = await userRepository.getByEmail(email.toLowerCase().trim());
+      let user: User | null = null;
+      
+      if (Platform.OS === 'web') {
+        user = MOCK_USERS.find(u => u.email.toLowerCase() === normalizedEmail) || null;
+        console.log('[AUTH] Web platform - using mock users');
+      } else {
+        user = await userRepository.getByEmail(normalizedEmail);
+      }
       
       if (!user) {
         console.log('[AUTH] User not found for email:', email);
@@ -108,10 +158,21 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const loginAsRole = useCallback(async (role: UserRole): Promise<boolean> => {
     console.log('[AUTH] Quick login as role:', role);
     
-    const users = await userRepository.getByRole(role);
+    let users: User[] = [];
+    
+    if (Platform.OS === 'web') {
+      users = MOCK_USERS.filter(u => u.role === role);
+    } else {
+      users = await userRepository.getByRole(role);
+    }
     
     if (users.length === 0) {
-      const allUsers = await userRepository.getAll();
+      let allUsers: User[] = [];
+      if (Platform.OS === 'web') {
+        allUsers = MOCK_USERS;
+      } else {
+        allUsers = await userRepository.getAll();
+      }
       if (allUsers.length > 0) {
         const user = allUsers[0];
         await setStoredAuth({ userId: user.id });

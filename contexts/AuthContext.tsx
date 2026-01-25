@@ -39,6 +39,14 @@ const MOCK_USERS: User[] = [
     token_mock: 'mock_token_auditor',
     created_at: new Date().toISOString(),
   },
+  {
+    id: 'mock-user-5',
+    email: 'manager@inspectra.fr',
+    name: 'Sophie Responsable',
+    role: 'HSE_MANAGER',
+    token_mock: 'mock_token_manager',
+    created_at: new Date().toISOString(),
+  },
 ];
 
 const STORAGE_KEY = 'inspectra_auth';

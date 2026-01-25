@@ -76,6 +76,8 @@ export async function seedDatabase(): Promise<void> {
   const userId1 = generateId();
   const userId2 = generateId();
   const userId3 = generateId();
+  const userId4 = generateId();
+  const userId5 = generateId();
   
   await db.runAsync(
     `INSERT INTO users (id, email, name, role, token_mock, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -90,6 +92,16 @@ export async function seedDatabase(): Promise<void> {
   await db.runAsync(
     `INSERT INTO users (id, email, name, role, token_mock, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
     [userId3, 'admin@inspectra.fr', 'Pierre Administrateur', 'ADMIN', 'mock_token_admin_789', formatDate(now)]
+  );
+
+  await db.runAsync(
+    `INSERT INTO users (id, email, name, role, token_mock, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId4, 'auditeur@inspectra.fr', 'Pierre Auditeur', 'AUDITOR', 'mock_token_auditor_101', formatDate(now)]
+  );
+
+  await db.runAsync(
+    `INSERT INTO users (id, email, name, role, token_mock, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+    [userId5, 'manager@inspectra.fr', 'Sophie Responsable', 'HSE_MANAGER', 'mock_token_manager_202', formatDate(now)]
   );
   
   // Control Types

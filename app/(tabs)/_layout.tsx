@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function TabLayout() {
   const router = useRouter();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user, canValidate } = useAuth();
+
+  const isManager = canValidate();
+  const isTechnician = user?.role === 'TECHNICIAN';
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -34,6 +37,23 @@ export default function TabLayout() {
         options={{
           title: 'Tableau de bord',
           tabBarIcon: ({ color, size }) => <LayoutDashboard size={size} color={color} />,
+          href: isTechnician ? '/(tabs)' : null,
+        }}
+      />
+      <Tabs.Screen
+        name="manager"
+        options={{
+          title: 'Manager',
+          tabBarIcon: ({ color, size }) => <Shield size={size} color={color} />,
+          href: isManager ? '/(tabs)/manager' : null,
+        }}
+      />
+      <Tabs.Screen
+        name="validation"
+        options={{
+          title: 'Validation',
+          tabBarIcon: ({ color, size }) => <CheckSquare size={size} color={color} />,
+          href: isManager ? '/(tabs)/validation' : null,
         }}
       />
       <Tabs.Screen

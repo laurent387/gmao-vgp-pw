@@ -1,6 +1,6 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, ViewStyle, TextStyle } from 'react-native';
-import { colors, spacing, borderRadius, typography } from '@/constants/theme';
+import { colors, spacing, borderRadius } from '@/constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'outline' | 'ghost' | 'danger';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -16,6 +16,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   fullWidth?: boolean;
+  testID?: string;
 }
 
 export function Button({
@@ -29,6 +30,7 @@ export function Button({
   style,
   textStyle,
   fullWidth = false,
+  testID,
 }: ButtonProps) {
   const getBackgroundColor = () => {
     if (disabled) return colors.border;
@@ -72,6 +74,7 @@ export function Button({
 
   return (
     <TouchableOpacity
+      testID={testID}
       style={[
         styles.button,
         { backgroundColor: getBackgroundColor() },

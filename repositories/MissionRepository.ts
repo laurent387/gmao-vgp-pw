@@ -2,7 +2,7 @@ import { getDatabase } from '@/db/database';
 import { Mission, MissionStatus, Asset } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockMissions, mockAssets } from '@/db/mockData';
+import { webApiService } from '@/services/WebApiService';
 
 export interface MissionFilters {
   siteId?: string;
@@ -17,11 +17,7 @@ export class MissionRepository extends BaseRepository<Mission> {
 
   async getAllWithDetails(filters?: MissionFilters): Promise<Mission[]> {
     if (Platform.OS === 'web') {
-      let results = [...mockMissions];
-      if (filters?.siteId) results = results.filter(m => m.site_id === filters.siteId);
-      if (filters?.status) results = results.filter(m => m.status === filters.status);
-      if (filters?.assignedTo) results = results.filter(m => m.assigned_to === filters.assignedTo);
-      return results.sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
+      return webApiService.getMissions(filters);
     }
     
     const db = await getDatabase();
@@ -68,10 +64,7 @@ export class MissionRepository extends BaseRepository<Mission> {
 
   async getByIdWithDetails(id: string): Promise<Mission | null> {
     if (Platform.OS === 'web') {
-      const mission = mockMissions.find(m => m.id === id);
-      if (!mission) return null;
-      const siteAssets = mockAssets.filter(a => a.site_id === mission.site_id).slice(0, (mission as any).asset_count || 3);
-      return { ...mission, assets: siteAssets };
+      return webApiService.getMissionById(id);
     }
     
     const db = await getDatabase();
@@ -129,13 +122,7 @@ export class MissionRepository extends BaseRepository<Mission> {
 
   async updateStatus(id: string, status: MissionStatus): Promise<void> {
     if (Platform.OS === 'web') {
-      const idx = mockMissions.findIndex(m => m.id === id);
-      if (idx >= 0) {
-        (mockMissions[idx] as any).status = status;
-        console.log('[MissionRepository] updateStatus(web)', { id, status });
-      } else {
-        console.log('[MissionRepository] updateStatus(web) mission not found', { id, status });
-      }
+      await webApiService.updateMissionStatus(id, status);
       return;
     }
 
@@ -144,7 +131,10 @@ export class MissionRepository extends BaseRepository<Mission> {
   }
 
   async getByStatus(status: MissionStatus): Promise<Mission[]> {
-    if (Platform.OS === 'web') return mockMissions.filter(m => m.status === status);
+    if (Platform.OS === 'web') {
+      const missions = await webApiService.getMissions({ status });
+      return missions;
+    }
     
     const db = await getDatabase();
     return db.getAllAsync<Mission>(
@@ -155,9 +145,7 @@ export class MissionRepository extends BaseRepository<Mission> {
 
   async getMissionAssets(missionId: string): Promise<Asset[]> {
     if (Platform.OS === 'web') {
-      const mission = mockMissions.find(m => m.id === missionId);
-      if (!mission) return [];
-      return mockAssets.filter(a => a.site_id === mission.site_id).slice(0, mission.asset_count || 3);
+      return webApiService.getMissionAssets(missionId);
     }
     
     const db = await getDatabase();

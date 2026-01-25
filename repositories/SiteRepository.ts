@@ -2,7 +2,7 @@ import { getDatabase } from '@/db/database';
 import { Client, Site, Zone } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockClients, mockSites, mockZones } from '@/db/mockData';
+import { webApiService } from '@/services/WebApiService';
 
 export class ClientRepository extends BaseRepository<Client> {
   constructor() {
@@ -29,10 +29,7 @@ export class SiteRepository extends BaseRepository<Site> {
 
   async getAllWithClientName(): Promise<Site[]> {
     if (Platform.OS === 'web') {
-      return mockSites.map(s => ({
-        ...s,
-        client_name: s.client_name ?? mockClients.find(c => c.id === s.client_id)?.name,
-      }));
+      return webApiService.getSites();
     }
 
     const db = await getDatabase();
@@ -45,7 +42,10 @@ export class SiteRepository extends BaseRepository<Site> {
   }
 
   async getByClientId(clientId: string): Promise<Site[]> {
-    if (Platform.OS === 'web') return mockSites.filter(s => s.client_id === clientId);
+    if (Platform.OS === 'web') {
+      const sites = await webApiService.getSites();
+      return sites.filter(s => s.client_id === clientId);
+    }
 
     const db = await getDatabase();
     return db.getAllAsync<Site>('SELECT * FROM sites WHERE client_id = ? ORDER BY name', [clientId]);
@@ -73,7 +73,7 @@ export class ZoneRepository extends BaseRepository<Zone> {
   }
 
   async getBySiteId(siteId: string): Promise<Zone[]> {
-    if (Platform.OS === 'web') return mockZones.filter(z => z.site_id === siteId);
+    if (Platform.OS === 'web') return webApiService.getZones(siteId);
     
     const db = await getDatabase();
     return db.getAllAsync<Zone>('SELECT * FROM zones WHERE site_id = ?', [siteId]);
@@ -81,10 +81,7 @@ export class ZoneRepository extends BaseRepository<Zone> {
 
   async getAllWithSiteName(): Promise<Zone[]> {
     if (Platform.OS === 'web') {
-      return mockZones.map(z => ({
-        ...z,
-        site_name: mockSites.find(s => s.id === z.site_id)?.name
-      }));
+      return webApiService.getZones();
     }
     
     const db = await getDatabase();

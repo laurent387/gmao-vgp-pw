@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Platform } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
@@ -10,6 +11,7 @@ export default function TabLayout() {
 
   const isManager = canValidate();
   const isTechnician = user?.role === 'TECHNICIAN';
+  const isWeb = Platform.OS === 'web';
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -104,6 +106,7 @@ export default function TabLayout() {
         options={{
           title: 'Sync',
           tabBarIcon: ({ color, size }) => <RefreshCw size={size} color={color} />,
+          href: isWeb ? null : '/(tabs)/sync',
         }}
       />
       <Tabs.Screen

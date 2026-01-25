@@ -2,7 +2,7 @@ import { getDatabase } from '@/db/database';
 import { Asset, AssetStatus } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockAssets, mockCategories, mockSites } from '@/db/mockData';
+import { webApiService } from '@/services/WebApiService';
 
 export interface AssetFilters {
   clientId?: string;
@@ -20,21 +20,7 @@ export class AssetRepository extends BaseRepository<Asset> {
 
   async getAllWithDetails(filters?: AssetFilters): Promise<Asset[]> {
     if (Platform.OS === 'web') {
-      let results = [...mockAssets];
-
-      if (filters?.clientId) {
-        const allowedSiteIds = new Set(mockSites.filter(s => s.client_id === filters.clientId).map(s => s.id));
-        results = results.filter(a => allowedSiteIds.has(a.site_id));
-      }
-      if (filters?.siteId) results = results.filter(a => a.site_id === filters.siteId);
-      if (filters?.zoneId) results = results.filter(a => a.zone_id === filters.zoneId);
-      if (filters?.categorie) results = results.filter(a => a.categorie === filters.categorie);
-      if (filters?.statut) results = results.filter(a => a.statut === filters.statut);
-      if (filters?.search) {
-        const s = filters.search.toLowerCase();
-        results = results.filter(a => a.code_interne.toLowerCase().includes(s) || a.designation.toLowerCase().includes(s));
-      }
-      return results;
+      return webApiService.getAssets(filters);
     }
     
     const db = await getDatabase();
@@ -96,7 +82,7 @@ export class AssetRepository extends BaseRepository<Asset> {
   }
 
   async getByIdWithDetails(id: string): Promise<Asset | null> {
-    if (Platform.OS === 'web') return mockAssets.find(a => a.id === id) || null;
+    if (Platform.OS === 'web') return webApiService.getAssetById(id);
     
     const db = await getDatabase();
     
@@ -160,7 +146,7 @@ export class AssetRepository extends BaseRepository<Asset> {
   }
 
   async getCategories(): Promise<string[]> {
-    if (Platform.OS === 'web') return mockCategories;
+    if (Platform.OS === 'web') return webApiService.getAssetCategories();
     
     const db = await getDatabase();
     const results = await db.getAllAsync<{ categorie: string }>('SELECT DISTINCT categorie FROM assets ORDER BY categorie');
@@ -168,7 +154,10 @@ export class AssetRepository extends BaseRepository<Asset> {
   }
 
   async getOverdueCount(): Promise<number> {
-    if (Platform.OS === 'web') return mockAssets.filter(a => a.is_overdue).length;
+    if (Platform.OS === 'web') {
+      const assets = await webApiService.getAssets();
+      return assets.filter(a => a.is_overdue).length;
+    }
     
     const db = await getDatabase();
     const result = await db.getFirstAsync<{ count: number }>(`
@@ -182,8 +171,9 @@ export class AssetRepository extends BaseRepository<Asset> {
 
   async getDueSoonCount(days: number): Promise<number> {
     if (Platform.OS === 'web') {
+      const assets = await webApiService.getAssets();
       const now = new Date();
-      return mockAssets.filter(a => {
+      return assets.filter(a => {
         if (!a.next_due_at) return false;
         const dueDate = new Date(a.next_due_at);
         const diffDays = Math.floor((dueDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));

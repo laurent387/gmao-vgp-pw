@@ -11,7 +11,20 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
-app.use("*", cors());
+app.use("*", cors({
+  origin: [
+    'https://in-spectra.com',
+    'https://www.in-spectra.com',
+    'https://app.in-spectra.com',
+    'https://api.in-spectra.com',
+    'http://localhost:8081',
+    'http://localhost:19006',
+    'http://localhost:3000',
+  ],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+}));
 
 const trpcHandler = trpcServer({
   endpoint: "/api/trpc",

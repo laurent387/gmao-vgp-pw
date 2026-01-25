@@ -103,6 +103,36 @@ bun run start -- --android
 
 ## How can I deploy this project?
 
+### Backend API (VPS) — api.in-spectra.com
+- Stack: Hono + tRPC + PostgreSQL, runtime Bun/Node 20+, served via Nginx + systemd. Guide: [DEPLOY.md](DEPLOY.md).
+- Quick start VPS (Ubuntu 24.04):
+   ```bash
+   # clone + install
+   git clone <repo> /var/www/in-spectra-api && cd /var/www/in-spectra-api
+   curl -fsSL https://bun.sh/install | bash && sudo ln -sf ~/.bun/bin/bun /usr/local/bin/bun
+   bun install
+   cp .env.example .env  # renseigne DB et EXPO_PUBLIC_RORK_API_BASE_URL=https://api.in-spectra.com/api
+
+   # service
+   sudo systemctl daemon-reload && sudo systemctl enable --now in-spectra-api  # voir service dans DEPLOY.md
+
+   # reverse proxy + HTTPS
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo certbot certonly --nginx -d api.in-spectra.com -d in-spectra.com -d app.in-spectra.com
+   ```
+- Checks: `curl https://api.in-spectra.com/` health; `curl -X POST https://api.in-spectra.com/api/trpc/auth.login`.
+
+### Domains
+- api.in-spectra.com → API (Nginx upstream 127.0.0.1:3000)
+- app.in-spectra.com → App web statique (si servie depuis VPS)
+- in-spectra.com → Landing statique
+Nginx server blocks prêts dans [DEPLOY.md](DEPLOY.md).
+
+### Prompt pour Rork (mettre à jour DEPLOY.md)
+```
+Tu es l’agent Rork côté app. Dès que tu ajoutes/changes une route API, une variable d’env ou un port, ouvre DEPLOY.md et mets-le à jour (env vars, endpoints, ports, Nginx, systemd). Garde api.in-spectra.com comme domaine API et le port 3000 en backend.
+```
+
 ### **Publish to App Store (iOS)**
 
 1. **Install EAS CLI**:

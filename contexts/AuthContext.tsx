@@ -140,15 +140,41 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[AUTH] Attempting login for:', email);
     const normalizedEmail = email.toLowerCase().trim();
     
+    // Helper function for local fallback auth
+    const tryLocalAuth = async (): Promise<User | null> => {
+      console.log('[AUTH] Trying local fallback...');
+      if (Platform.OS === 'web') {
+        return MOCK_USERS.find(u => u.email.toLowerCase() === normalizedEmail) || null;
+      } else {
+        return await userRepository.getByEmail(normalizedEmail);
+      }
+    };
+    
+    // Try backend first with timeout
     try {
       console.log('[AUTH] Calling backend API...');
-      const result = await trpcClient.auth.login.mutate({
-        email: normalizedEmail,
-        password: password || 'demo123',
-      });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout')), 5000)
+      );
+      
+      const result = await Promise.race([
+        trpcClient.auth.login.mutate({
+          email: normalizedEmail,
+          password: password || 'demo123',
+        }),
+        timeoutPromise
+      ]);
       
       if (!result?.user) {
-        console.log('[AUTH] Backend returned no user');
+        console.log('[AUTH] Backend returned no user, trying fallback...');
+        const user = await tryLocalAuth();
+        if (user) {
+          await setStoredAuth({ userId: user.id });
+          setState({ user, isLoading: false, isAuthenticated: true });
+          console.log('[AUTH] Fallback login successful for:', user.email);
+          return true;
+        }
         return false;
       }
       
@@ -166,17 +192,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
       return true;
     } catch (error: any) {
-      console.error('[AUTH] Login error:', error?.message || error);
+      console.log('[AUTH] Backend unavailable:', error?.message || 'Unknown error');
       
       // Fallback to local auth if backend fails
-      console.log('[AUTH] Trying local fallback...');
-      let user: User | null = null;
-      
-      if (Platform.OS === 'web') {
-        user = MOCK_USERS.find(u => u.email.toLowerCase() === normalizedEmail) || null;
-      } else {
-        user = await userRepository.getByEmail(normalizedEmail);
-      }
+      const user = await tryLocalAuth();
       
       if (user) {
         await setStoredAuth({ userId: user.id });
@@ -185,6 +204,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         return true;
       }
       
+      console.log('[AUTH] No matching user found in fallback');
       return false;
     }
   }, []);

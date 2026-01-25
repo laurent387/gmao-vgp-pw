@@ -55,8 +55,15 @@ export async function ensurePgSchema(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS clients (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS sites (
       id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE RESTRICT,
       name TEXT NOT NULL,
       address TEXT,
       created_at TIMESTAMPTZ NOT NULL

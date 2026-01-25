@@ -59,11 +59,19 @@ export async function initializeDatabase(): Promise<void> {
       created_at TEXT NOT NULL
     );
 
-    CREATE TABLE IF NOT EXISTS sites (
+    CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      address TEXT,
       created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS sites (
+      id TEXT PRIMARY KEY,
+      client_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      address TEXT,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (client_id) REFERENCES clients(id)
     );
 
     CREATE TABLE IF NOT EXISTS zones (
@@ -269,6 +277,7 @@ export async function clearDatabase(): Promise<void> {
     DELETE FROM assets;
     DELETE FROM zones;
     DELETE FROM sites;
+    DELETE FROM clients;
     DELETE FROM users;
   `);
   

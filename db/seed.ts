@@ -16,16 +16,16 @@ function addDays(date: Date, days: number): Date {
 }
 
 const clientsData = [
-  { name: 'Carrefour Logistique Lyon', address: '123 Rue de l\'Industrie, 69000 Lyon' },
-  { name: 'Amazon Fulfilment Satolas', address: '45 Zone Industrielle Est, 69125 Lyon-Saint-Exupéry' },
-  { name: 'Michelin Clermont-Ferrand', address: '12 Place des Carmes, 63000 Clermont-Ferrand' },
-  { name: 'Renault Trucks Vénissieux', address: '99 Route de Lyon, 69200 Vénissieux' },
-  { name: 'Sanofi Marcy-l\'Étoile', address: '1546 Chemin de Sanofi, 69280 Marcy-l\'Étoile' },
-  { name: 'LDLC Limonest', address: '2 Rue des Érables, 69760 Limonest' },
-  { name: 'Saint-Gobain Distribution', address: '78 Avenue Jean Jaurès, 69007 Lyon' },
-  { name: 'Geodis Corbas', address: '15 Rue de la Logistique, 69960 Corbas' },
-  { name: 'Bosch Rexroth Vénissieux', address: '64 Rue Yves Farge, 69200 Vénissieux' },
-  { name: 'FM Logistic Fos-sur-Mer', address: '200 Zone Portuaire, 13270 Fos-sur-Mer' },
+  { clientName: 'Carrefour', siteName: 'Carrefour Logistique Lyon', address: '123 Rue de l\'Industrie, 69000 Lyon' },
+  { clientName: 'Amazon', siteName: 'Amazon Fulfilment Satolas', address: '45 Zone Industrielle Est, 69125 Lyon-Saint-Exupéry' },
+  { clientName: 'Michelin', siteName: 'Michelin Clermont-Ferrand', address: '12 Place des Carmes, 63000 Clermont-Ferrand' },
+  { clientName: 'Renault Trucks', siteName: 'Renault Trucks Vénissieux', address: '99 Route de Lyon, 69200 Vénissieux' },
+  { clientName: 'Sanofi', siteName: 'Sanofi Marcy-l\'Étoile', address: '1546 Chemin de Sanofi, 69280 Marcy-l\'Étoile' },
+  { clientName: 'LDLC', siteName: 'LDLC Limonest', address: '2 Rue des Érables, 69760 Limonest' },
+  { clientName: 'Saint-Gobain', siteName: 'Saint-Gobain Distribution', address: '78 Avenue Jean Jaurès, 69007 Lyon' },
+  { clientName: 'Geodis', siteName: 'Geodis Corbas', address: '15 Rue de la Logistique, 69960 Corbas' },
+  { clientName: 'Bosch Rexroth', siteName: 'Bosch Rexroth Vénissieux', address: '64 Rue Yves Farge, 69200 Vénissieux' },
+  { clientName: 'FM Logistic', siteName: 'FM Logistic Fos-sur-Mer', address: '200 Zone Portuaire, 13270 Fos-sur-Mer' },
 ];
 
 const zonesData = [
@@ -188,20 +188,27 @@ export async function seedDatabase(): Promise<void> {
     );
   }
   
-  // Create 10 sites (clients) with zones and assets
+  // Create clients + sites with zones and assets
   const allAssetIds: string[] = [];
   const siteIds: string[] = [];
   const assetsBySite: Record<string, string[]> = {};
   
   for (let siteIndex = 0; siteIndex < clientsData.length; siteIndex++) {
-    const client = clientsData[siteIndex];
+    const record = clientsData[siteIndex];
+
+    const clientId = generateId();
+    await db.runAsync(
+      `INSERT INTO clients (id, name, created_at) VALUES (?, ?, ?)`,
+      [clientId, record.clientName, formatDate(now)]
+    );
+
     const siteId = generateId();
     siteIds.push(siteId);
     assetsBySite[siteId] = [];
-    
+
     await db.runAsync(
-      `INSERT INTO sites (id, name, address, created_at) VALUES (?, ?, ?, ?)`,
-      [siteId, client.name, client.address, formatDate(now)]
+      `INSERT INTO sites (id, client_id, name, address, created_at) VALUES (?, ?, ?, ?, ?)`,
+      [siteId, clientId, record.siteName, record.address, formatDate(now)]
     );
     
     // Create zones for this site

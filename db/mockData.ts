@@ -1,4 +1,4 @@
-import { Asset, Site, Zone, Mission, NonConformity, Report, MaintenanceLog, ControlType, CorrectiveAction, AssetStatus, SeverityLevel, NCStatus, ActionStatus, ControlConclusion, OperationType } from '@/types';
+import { Asset, Site, Zone, Mission, NonConformity, Report, MaintenanceLog, ControlType, CorrectiveAction, AssetStatus, SeverityLevel, NCStatus, ActionStatus, ControlConclusion, OperationType, Client } from '@/types';
 
 function formatDate(date: Date): string {
   return date.toISOString();
@@ -26,18 +26,32 @@ export const mockControlTypes: ControlType[] = [
   { id: 'ct3', code: 'REMISE_SERVICE', label: 'Remise en Service', description: 'Vérification avant remise en service après arrêt prolongé', periodicity_days: 0, active: true },
 ];
 
-// Sites (Clients)
+// Clients
+export const mockClients: Client[] = [
+  { id: 'client1', name: 'Carrefour', created_at: formatDate(now) },
+  { id: 'client2', name: 'Amazon', created_at: formatDate(now) },
+  { id: 'client3', name: 'Michelin', created_at: formatDate(now) },
+  { id: 'client4', name: 'Renault Trucks', created_at: formatDate(now) },
+  { id: 'client5', name: 'Sanofi', created_at: formatDate(now) },
+  { id: 'client6', name: 'LDLC', created_at: formatDate(now) },
+  { id: 'client7', name: 'Saint-Gobain', created_at: formatDate(now) },
+  { id: 'client8', name: 'Geodis', created_at: formatDate(now) },
+  { id: 'client9', name: 'Bosch Rexroth', created_at: formatDate(now) },
+  { id: 'client10', name: 'FM Logistic', created_at: formatDate(now) },
+];
+
+// Sites (dépendent d'un client)
 export const mockSites: Site[] = [
-  { id: 'site1', name: 'Carrefour Logistique Lyon', address: '123 Rue de l\'Industrie, 69000 Lyon', created_at: formatDate(now) },
-  { id: 'site2', name: 'Amazon Fulfilment Satolas', address: '45 Zone Industrielle Est, 69125 Lyon-Saint-Exupéry', created_at: formatDate(now) },
-  { id: 'site3', name: 'Michelin Clermont-Ferrand', address: '12 Place des Carmes, 63000 Clermont-Ferrand', created_at: formatDate(now) },
-  { id: 'site4', name: 'Renault Trucks Vénissieux', address: '99 Route de Lyon, 69200 Vénissieux', created_at: formatDate(now) },
-  { id: 'site5', name: 'Sanofi Marcy-l\'Étoile', address: '1546 Chemin de Sanofi, 69280 Marcy-l\'Étoile', created_at: formatDate(now) },
-  { id: 'site6', name: 'LDLC Limonest', address: '2 Rue des Érables, 69760 Limonest', created_at: formatDate(now) },
-  { id: 'site7', name: 'Saint-Gobain Distribution', address: '78 Avenue Jean Jaurès, 69007 Lyon', created_at: formatDate(now) },
-  { id: 'site8', name: 'Geodis Corbas', address: '15 Rue de la Logistique, 69960 Corbas', created_at: formatDate(now) },
-  { id: 'site9', name: 'Bosch Rexroth Vénissieux', address: '64 Rue Yves Farge, 69200 Vénissieux', created_at: formatDate(now) },
-  { id: 'site10', name: 'FM Logistic Fos-sur-Mer', address: '200 Zone Portuaire, 13270 Fos-sur-Mer', created_at: formatDate(now) },
+  { id: 'site1', client_id: 'client1', name: 'Carrefour Logistique Lyon', address: '123 Rue de l\'Industrie, 69000 Lyon', created_at: formatDate(now), client_name: 'Carrefour' },
+  { id: 'site2', client_id: 'client2', name: 'Amazon Fulfilment Satolas', address: '45 Zone Industrielle Est, 69125 Lyon-Saint-Exupéry', created_at: formatDate(now), client_name: 'Amazon' },
+  { id: 'site3', client_id: 'client3', name: 'Michelin Clermont-Ferrand', address: '12 Place des Carmes, 63000 Clermont-Ferrand', created_at: formatDate(now), client_name: 'Michelin' },
+  { id: 'site4', client_id: 'client4', name: 'Renault Trucks Vénissieux', address: '99 Route de Lyon, 69200 Vénissieux', created_at: formatDate(now), client_name: 'Renault Trucks' },
+  { id: 'site5', client_id: 'client5', name: 'Sanofi Marcy-l\'Étoile', address: '1546 Chemin de Sanofi, 69280 Marcy-l\'Étoile', created_at: formatDate(now), client_name: 'Sanofi' },
+  { id: 'site6', client_id: 'client6', name: 'LDLC Limonest', address: '2 Rue des Érables, 69760 Limonest', created_at: formatDate(now), client_name: 'LDLC' },
+  { id: 'site7', client_id: 'client7', name: 'Saint-Gobain Distribution', address: '78 Avenue Jean Jaurès, 69007 Lyon', created_at: formatDate(now), client_name: 'Saint-Gobain' },
+  { id: 'site8', client_id: 'client8', name: 'Geodis Corbas', address: '15 Rue de la Logistique, 69960 Corbas', created_at: formatDate(now), client_name: 'Geodis' },
+  { id: 'site9', client_id: 'client9', name: 'Bosch Rexroth Vénissieux', address: '64 Rue Yves Farge, 69200 Vénissieux', created_at: formatDate(now), client_name: 'Bosch Rexroth' },
+  { id: 'site10', client_id: 'client10', name: 'FM Logistic Fos-sur-Mer', address: '200 Zone Portuaire, 13270 Fos-sur-Mer', created_at: formatDate(now), client_name: 'FM Logistic' },
 ];
 
 // Zones

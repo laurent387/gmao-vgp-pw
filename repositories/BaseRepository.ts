@@ -1,9 +1,10 @@
 import { getDatabase } from '@/db/database';
 import { Platform } from 'react-native';
-import { mockAssets, mockSites, mockZones, mockMissions, mockNonConformities, mockCorrectiveActions, mockMaintenanceLogs, mockControlTypes, mockReports } from '@/db/mockData';
+import { mockAssets, mockSites, mockZones, mockMissions, mockNonConformities, mockCorrectiveActions, mockMaintenanceLogs, mockControlTypes, mockReports, mockClients } from '@/db/mockData';
 
 const mockDataMap: Record<string, any[]> = {
   assets: mockAssets,
+  clients: mockClients,
   sites: mockSites,
   zones: mockZones,
   missions: mockMissions,

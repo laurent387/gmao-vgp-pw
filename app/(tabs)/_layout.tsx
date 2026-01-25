@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2 } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -54,6 +54,13 @@ export default function TabLayout() {
           title: 'Validation',
           tabBarIcon: ({ color, size }) => <CheckSquare size={size} color={color} />,
           href: isManager ? '/(tabs)/validation' : null,
+        }}
+      />
+      <Tabs.Screen
+        name="sites"
+        options={{
+          title: 'Sites clients',
+          tabBarIcon: ({ color, size }) => <Building2 size={size} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Package, Filter } from 'lucide-react-native';
 import { colors, spacing } from '@/constants/theme';
@@ -13,8 +13,11 @@ import { Asset, AssetStatus } from '@/types';
 
 export default function InventoryScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ siteId?: string }>();
+  const initialSiteId = typeof params.siteId === 'string' ? params.siteId : undefined;
+
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<AssetFilters>({});
+  const [filters, setFilters] = useState<AssetFilters>({ siteId: initialSiteId });
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 

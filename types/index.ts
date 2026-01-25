@@ -29,11 +29,19 @@ export interface User {
   created_at: string;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface Site {
   id: string;
+  client_id: string;
   name: string;
   address?: string;
   created_at: string;
+  client_name?: string;
 }
 
 export interface Zone {

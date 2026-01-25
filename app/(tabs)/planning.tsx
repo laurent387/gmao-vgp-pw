@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, SectionList, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, AlertTriangle, Clock, CheckCircle, CalendarDays } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, CalendarDays } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
 import { EcheanceListItem } from '@/components/ListItem';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
@@ -151,30 +151,6 @@ export default function PlanningScreen() {
         ))}
       </View>
 
-      <View style={styles.summary}>
-        <View style={[styles.summaryItem, { borderLeftColor: colors.danger }]}>
-          <AlertTriangle size={16} color={colors.danger} />
-          <Text style={styles.summaryCount}>
-            {echeances?.filter(e => e.is_overdue).length ?? 0}
-          </Text>
-          <Text style={styles.summaryLabel}>retard</Text>
-        </View>
-        <View style={[styles.summaryItem, { borderLeftColor: colors.warning }]}>
-          <Clock size={16} color={colors.warning} />
-          <Text style={styles.summaryCount}>
-            {echeances?.filter(e => !e.is_overdue && e.days_remaining <= 7).length ?? 0}
-          </Text>
-          <Text style={styles.summaryLabel}>7 jours</Text>
-        </View>
-        <View style={[styles.summaryItem, { borderLeftColor: colors.info }]}>
-          <Calendar size={16} color={colors.info} />
-          <Text style={styles.summaryCount}>
-            {echeances?.filter(e => !e.is_overdue && e.days_remaining <= 30).length ?? 0}
-          </Text>
-          <Text style={styles.summaryLabel}>30 jours</Text>
-        </View>
-      </View>
-
       {filter === 'all' ? (
         <FlatList
           data={Object.keys(groupedByDate).sort()}
@@ -312,32 +288,7 @@ const styles = StyleSheet.create({
   filterTabTextActive: {
     color: colors.textInverse,
   },
-  summary: {
-    flexDirection: 'row',
-    padding: spacing.md,
-    gap: spacing.md,
-    backgroundColor: colors.surface,
-  },
-  summaryItem: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: borderRadius.md,
-    borderLeftWidth: 3,
-  },
-  summaryCount: {
-    fontSize: typography.h3.fontSize,
-    fontWeight: '700' as const,
-    color: colors.text,
-  },
-  summaryLabel: {
-    fontSize: typography.caption.fontSize,
-    color: colors.textMuted,
-  },
+
   listContent: {
     padding: spacing.lg,
     flexGrow: 1,

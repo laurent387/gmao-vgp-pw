@@ -73,8 +73,8 @@ export default function PlanningScreen() {
   const chronologicalEvents = useMemo(() => {
     if (!echeances) return [];
     return [...echeances].sort((a, b) => {
-      const dateA = new Date(a.next_due_date).getTime();
-      const dateB = new Date(b.next_due_date).getTime();
+      const dateA = new Date(a.next_due_at).getTime();
+      const dateB = new Date(b.next_due_at).getTime();
       return dateA - dateB;
     });
   }, [echeances]);
@@ -82,7 +82,7 @@ export default function PlanningScreen() {
   const groupedByDate = useMemo(() => {
     const groups: { [key: string]: DueEcheance[] } = {};
     chronologicalEvents.forEach(event => {
-      const date = new Date(event.next_due_date);
+      const date = new Date(event.next_due_at);
       const key = date.toISOString().split('T')[0];
       if (!groups[key]) {
         groups[key] = [];

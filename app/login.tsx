@@ -23,16 +23,28 @@ export default function LoginScreen() {
     }
   }, [isAuthenticated]);
 
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
+  };
+
   const handleLogin = async () => {
-    if (!email.trim()) {
+    const trimmedEmail = email.trim();
+    
+    if (!trimmedEmail) {
       setError('Veuillez entrer votre email');
+      return;
+    }
+
+    if (!isValidEmail(trimmedEmail)) {
+      setError('Format d\'email invalide');
       return;
     }
 
     setIsLoading(true);
     setError('');
 
-    const success = await login(email.trim(), password);
+    const success = await login(trimmedEmail, password);
     
     if (success) {
       router.replace('/(tabs)');

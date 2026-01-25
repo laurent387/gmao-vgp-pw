@@ -70,14 +70,24 @@ export default function ExecuteControlScreen() {
       if (!asset || !mission || !user) throw new Error('Données manquantes');
       if (!attestation) throw new Error('Veuillez attester le rapport');
       
+      if (!checklistItems) throw new Error('Checklist indisponible');
+
       const itemResults = Object.values(results);
       const hasKO = itemResults.some(r => r.status === 'KO');
-      const allAnswered = checklistItems?.every(item => 
+      const allAnswered = checklistItems.every(item => 
         results[item.id]?.status !== undefined
       );
       
       if (!allAnswered) {
         throw new Error('Veuillez répondre à toutes les questions obligatoires');
+      }
+
+      const missingKoComments = checklistItems
+        .filter(item => results[item.id]?.status === 'KO')
+        .filter(item => !(results[item.id]?.comment ?? '').trim());
+
+      if (missingKoComments.length > 0) {
+        throw new Error('Veuillez ajouter un commentaire pour chaque point en KO');
       }
 
       let conclusion: ControlConclusion = 'CONFORME';
@@ -230,6 +240,7 @@ export default function ExecuteControlScreen() {
               {item.field_type === 'BOOL' && (
                 <View style={styles.boolButtons}>
                   <TouchableOpacity
+                    testID={`checklist-item-${item.id}-ok`}
                     style={[styles.boolButton, styles.okButton, results[item.id]?.status === 'OK' && styles.okButtonActive]}
                     onPress={() => setItemResult(item.id, { status: 'OK' })}
                   >
@@ -240,6 +251,7 @@ export default function ExecuteControlScreen() {
                   </TouchableOpacity>
                   
                   <TouchableOpacity
+                    testID={`checklist-item-${item.id}-ko`}
                     style={[styles.boolButton, styles.koButton, results[item.id]?.status === 'KO' && styles.koButtonActive]}
                     onPress={() => setItemResult(item.id, { status: 'KO' })}
                   >
@@ -250,6 +262,7 @@ export default function ExecuteControlScreen() {
                   </TouchableOpacity>
                   
                   <TouchableOpacity
+                    testID={`checklist-item-${item.id}-na`}
                     style={[styles.boolButton, styles.naButton, results[item.id]?.status === 'NA' && styles.naButtonActive]}
                     onPress={() => setItemResult(item.id, { status: 'NA' })}
                   >
@@ -263,6 +276,7 @@ export default function ExecuteControlScreen() {
 
               {item.field_type === 'NUM' && (
                 <TextInput
+                  testID={`checklist-item-${item.id}-num`}
                   style={styles.numInput}
                   keyboardType="numeric"
                   placeholder="Valeur numérique"
@@ -276,6 +290,7 @@ export default function ExecuteControlScreen() {
 
               {item.field_type === 'TEXT' && (
                 <TextInput
+                  testID={`checklist-item-${item.id}-text`}
                   style={[styles.numInput, styles.textInput]}
                   multiline
                   placeholder="Observations..."
@@ -284,15 +299,19 @@ export default function ExecuteControlScreen() {
                 />
               )}
 
-              {(item.field_type === 'BOOL' && results[item.id]?.status === 'KO') && (
+              <View style={styles.commentBlock}>
+                <Text style={styles.commentLabel}>
+                  {results[item.id]?.status === 'KO' ? 'Commentaire (requis)' : 'Commentaire (optionnel)'}
+                </Text>
                 <TextInput
-                  style={[styles.numInput, styles.textInput]}
+                  testID={`checklist-item-${item.id}-comment`}
+                  style={[styles.numInput, styles.textInput, results[item.id]?.status === 'KO' && styles.commentInputKo]}
                   multiline
-                  placeholder="Commentaire obligatoire pour KO..."
+                  placeholder={results[item.id]?.status === 'KO' ? 'Décrivez la non-conformité...' : 'Ajouter une note / remarque...'}
                   value={results[item.id]?.comment || ''}
                   onChangeText={(text) => setItemResult(item.id, { comment: text })}
                 />
-              )}
+              </View>
             </View>
           ))}
         </View>
@@ -300,6 +319,7 @@ export default function ExecuteControlScreen() {
         <View style={styles.summarySection}>
           <Text style={styles.sectionTitle}>Résumé</Text>
           <TextInput
+            testID="control-summary"
             style={[styles.numInput, styles.textInput]}
             multiline
             placeholder="Observations générales..."
@@ -332,6 +352,7 @@ export default function ExecuteControlScreen() {
         </View>
 
         <Button
+          testID="submit-report"
           title="Valider le rapport"
           onPress={() => submitMutation.mutate()}
           loading={submitMutation.isPending}
@@ -486,6 +507,19 @@ const styles = StyleSheet.create({
     minHeight: 80,
     textAlignVertical: 'top',
     marginTop: spacing.sm,
+  },
+  commentBlock: {
+    marginTop: spacing.md,
+  },
+  commentLabel: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    fontWeight: '600' as const,
+    marginBottom: spacing.xs,
+  },
+  commentInputKo: {
+    borderColor: colors.danger,
+    backgroundColor: colors.danger + '08',
   },
   summarySection: {
     marginBottom: spacing.xl,

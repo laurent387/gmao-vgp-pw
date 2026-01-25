@@ -1,78 +1,36 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
+import { pgQuery } from "../../db/postgres";
 
-const mockNCs: Array<{
+interface DbNC {
   id: string;
   report_id: string | null;
   asset_id: string;
   checklist_item_id: string | null;
   title: string;
-  description: string;
-  severity: 1 | 2 | 3 | 4 | 5;
-  status: "OUVERTE" | "EN_COURS" | "CLOTUREE";
+  description: string | null;
+  severity: number;
+  status: string;
   created_at: string;
   asset_code?: string;
   asset_designation?: string;
-}> = [
-  {
-    id: "nc-1",
-    report_id: "report-2",
-    asset_id: "asset-2",
-    checklist_item_id: "item-5",
-    title: "Système de freinage défaillant",
-    description: "Le système de freinage présente une usure anormale. Remplacement nécessaire.",
-    severity: 4,
-    status: "OUVERTE",
-    created_at: "2024-02-01",
-    asset_code: "GRUE-001",
-    asset_designation: "Grue à tour Liebherr",
-  },
-  {
-    id: "nc-2",
-    report_id: null,
-    asset_id: "asset-1",
-    checklist_item_id: null,
-    title: "Fuite hydraulique",
-    description: "Fuite constatée sur le circuit hydraulique principal.",
-    severity: 3,
-    status: "EN_COURS",
-    created_at: "2024-01-20",
-    asset_code: "CHAR-001",
-    asset_designation: "Chariot élévateur Toyota",
-  },
-];
+  site_name?: string;
+}
 
-const mockActions: Array<{
+interface DbAction {
   id: string;
   nonconformity_id: string;
   owner: string;
+  description: string | null;
   due_at: string;
-  status: "OUVERTE" | "EN_COURS" | "CLOTUREE" | "VALIDEE";
+  status: string;
   closed_at: string | null;
   validated_by: string | null;
-  description: string;
-}> = [
-  {
-    id: "action-1",
-    nonconformity_id: "nc-1",
-    owner: "Jean Technicien",
-    due_at: "2024-02-15",
-    status: "OUVERTE",
-    closed_at: null,
-    validated_by: null,
-    description: "Remplacer les plaquettes de frein et vérifier le système.",
-  },
-  {
-    id: "action-2",
-    nonconformity_id: "nc-2",
-    owner: "Jean Technicien",
-    due_at: "2024-02-10",
-    status: "EN_COURS",
-    closed_at: null,
-    validated_by: null,
-    description: "Identifier la source de la fuite et procéder à la réparation.",
-  },
-];
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
 
 export const ncRouter = createTRPCRouter({
   list: publicProcedure
@@ -84,29 +42,93 @@ export const ncRouter = createTRPCRouter({
       }).optional()
     )
     .query(async ({ input }) => {
-      let filtered = [...mockNCs];
+      console.log("[NC] Fetching nonconformities with filters:", input);
+
+      let query = `
+        SELECT nc.*, 
+               a.code_interne as asset_code,
+               a.designation as asset_designation,
+               s.name as site_name
+        FROM nonconformities nc
+        LEFT JOIN assets a ON nc.asset_id = a.id
+        LEFT JOIN sites s ON a.site_id = s.id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+      let paramIndex = 1;
 
       if (input?.status) {
-        filtered = filtered.filter((nc) => nc.status === input.status);
+        query += ` AND nc.status = $${paramIndex++}`;
+        params.push(input.status);
       }
       if (input?.assetId) {
-        filtered = filtered.filter((nc) => nc.asset_id === input.assetId);
+        query += ` AND nc.asset_id = $${paramIndex++}`;
+        params.push(input.assetId);
       }
       if (input?.severity) {
-        filtered = filtered.filter((nc) => nc.severity >= input.severity!);
+        query += ` AND nc.severity >= $${paramIndex++}`;
+        params.push(input.severity);
       }
 
-      return filtered;
+      query += " ORDER BY nc.created_at DESC";
+
+      const ncs = await pgQuery<DbNC>(query, params);
+      console.log("[NC] Found nonconformities:", ncs.length);
+
+      return ncs.map((nc) => ({
+        id: nc.id,
+        report_id: nc.report_id,
+        asset_id: nc.asset_id,
+        checklist_item_id: nc.checklist_item_id,
+        title: nc.title,
+        description: nc.description || "",
+        severity: nc.severity,
+        status: nc.status,
+        created_at: nc.created_at,
+        asset_code: nc.asset_code || "",
+        asset_designation: nc.asset_designation || "",
+        site_name: nc.site_name || "",
+      }));
     }),
 
   getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      const nc = mockNCs.find((nc) => nc.id === input.id);
+      const ncs = await pgQuery<DbNC>(
+        `SELECT nc.*, 
+                a.code_interne as asset_code,
+                a.designation as asset_designation,
+                s.name as site_name
+         FROM nonconformities nc
+         LEFT JOIN assets a ON nc.asset_id = a.id
+         LEFT JOIN sites s ON a.site_id = s.id
+         WHERE nc.id = $1`,
+        [input.id]
+      );
+
+      const nc = ncs[0];
       if (!nc) return null;
 
-      const action = mockActions.find((a) => a.nonconformity_id === nc.id);
-      return { ...nc, corrective_action: action || null };
+      const actions = await pgQuery<DbAction>(
+        "SELECT * FROM corrective_actions WHERE nonconformity_id = $1 ORDER BY due_at",
+        [input.id]
+      );
+
+      return {
+        id: nc.id,
+        report_id: nc.report_id,
+        asset_id: nc.asset_id,
+        checklist_item_id: nc.checklist_item_id,
+        title: nc.title,
+        description: nc.description || "",
+        severity: nc.severity,
+        status: nc.status,
+        created_at: nc.created_at,
+        asset_code: nc.asset_code || "",
+        asset_designation: nc.asset_designation || "",
+        site_name: nc.site_name || "",
+        corrective_action: actions[0] || null,
+      };
     }),
 
   create: protectedProcedure
@@ -121,19 +143,26 @@ export const ncRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const newNC = {
-        id: `nc-${Date.now()}`,
+      const id = generateId();
+      const now = new Date().toISOString();
+
+      await pgQuery(
+        `INSERT INTO nonconformities (id, report_id, asset_id, checklist_item_id, title, description, severity, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 'OUVERTE', $8)`,
+        [id, input.report_id || null, input.asset_id, input.checklist_item_id || null, input.title, input.description, input.severity, now]
+      );
+
+      return {
+        id,
         report_id: input.report_id || null,
         asset_id: input.asset_id,
         checklist_item_id: input.checklist_item_id || null,
         title: input.title,
         description: input.description,
-        severity: input.severity as 1 | 2 | 3 | 4 | 5,
-        status: "OUVERTE" as const,
-        created_at: new Date().toISOString(),
+        severity: input.severity,
+        status: "OUVERTE",
+        created_at: now,
       };
-      mockNCs.push(newNC);
-      return newNC;
     }),
 
   updateStatus: protectedProcedure
@@ -144,18 +173,27 @@ export const ncRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const index = mockNCs.findIndex((nc) => nc.id === input.id);
-      if (index === -1) {
-        throw new Error("Non-conformity not found");
-      }
-      mockNCs[index].status = input.status;
-      return mockNCs[index];
+      await pgQuery(
+        "UPDATE nonconformities SET status = $1 WHERE id = $2",
+        [input.status, input.id]
+      );
+
+      const ncs = await pgQuery<DbNC>(
+        "SELECT * FROM nonconformities WHERE id = $1",
+        [input.id]
+      );
+
+      return ncs[0] || null;
     }),
 
   actions: publicProcedure
     .input(z.object({ ncId: z.string() }))
     .query(async ({ input }) => {
-      return mockActions.filter((a) => a.nonconformity_id === input.ncId);
+      const actions = await pgQuery<DbAction>(
+        "SELECT * FROM corrective_actions WHERE nonconformity_id = $1 ORDER BY due_at",
+        [input.ncId]
+      );
+      return actions;
     }),
 
   createAction: protectedProcedure
@@ -168,18 +206,24 @@ export const ncRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const newAction = {
-        id: `action-${Date.now()}`,
+      const id = generateId();
+
+      await pgQuery(
+        `INSERT INTO corrective_actions (id, nonconformity_id, owner, description, due_at, status)
+         VALUES ($1, $2, $3, $4, $5, 'OUVERTE')`,
+        [id, input.nonconformity_id, input.owner, input.description, input.due_at]
+      );
+
+      return {
+        id,
         nonconformity_id: input.nonconformity_id,
         owner: input.owner,
         due_at: input.due_at,
-        status: "OUVERTE" as const,
+        status: "OUVERTE",
         closed_at: null,
         validated_by: null,
         description: input.description,
       };
-      mockActions.push(newAction);
-      return newAction;
     }),
 
   updateActionStatus: protectedProcedure
@@ -191,17 +235,29 @@ export const ncRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const index = mockActions.findIndex((a) => a.id === input.id);
-      if (index === -1) {
-        throw new Error("Action not found");
-      }
-      mockActions[index].status = input.status;
+      let query = "UPDATE corrective_actions SET status = $1";
+      const params: any[] = [input.status];
+      let paramIndex = 2;
+
       if (input.status === "CLOTUREE") {
-        mockActions[index].closed_at = new Date().toISOString();
+        query += `, closed_at = $${paramIndex++}`;
+        params.push(new Date().toISOString());
       }
       if (input.status === "VALIDEE" && input.validatedBy) {
-        mockActions[index].validated_by = input.validatedBy;
+        query += `, validated_by = $${paramIndex++}`;
+        params.push(input.validatedBy);
       }
-      return mockActions[index];
+
+      query += ` WHERE id = $${paramIndex}`;
+      params.push(input.id);
+
+      await pgQuery(query, params);
+
+      const actions = await pgQuery<DbAction>(
+        "SELECT * FROM corrective_actions WHERE id = $1",
+        [input.id]
+      );
+
+      return actions[0] || null;
     }),
 });

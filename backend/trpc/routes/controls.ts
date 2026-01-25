@@ -1,86 +1,54 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
+import { pgQuery } from "../../db/postgres";
 
-const mockControlTypes = [
-  {
-    id: "ct-1",
-    code: "VGP",
-    label: "VGP Périodique",
-    description: "Vérification Générale Périodique - Contrôle annuel obligatoire",
-    periodicity_days: 365,
-    active: true,
-  },
-  {
-    id: "ct-2",
-    code: "VGP_RENFORCE",
-    label: "VGP Renforcée",
-    description: "VGP avec périodicité renforcée pour équipements critiques",
-    periodicity_days: 180,
-    active: true,
-  },
-  {
-    id: "ct-3",
-    code: "MISE_EN_SERVICE",
-    label: "Vérification Mise en Service",
-    description: "Contrôle initial avant première utilisation",
-    periodicity_days: 0,
-    active: true,
-  },
-  {
-    id: "ct-4",
-    code: "REMISE_EN_SERVICE",
-    label: "Remise en Service",
-    description: "Contrôle après réparation ou modification",
-    periodicity_days: 0,
-    active: true,
-  },
-];
+interface DbControlType {
+  id: string;
+  code: string;
+  label: string;
+  description: string | null;
+  periodicity_days: number;
+  active: boolean;
+}
 
-const mockDueEcheances = [
-  {
-    id: "due-1",
-    asset_id: "asset-1",
-    asset_code: "CHAR-001",
-    asset_designation: "Chariot élévateur Toyota",
-    control_type_label: "VGP Périodique",
-    next_due_at: "2024-06-15",
-    days_remaining: -30,
-    is_overdue: true,
-    site_name: "Site Principal",
-  },
-  {
-    id: "due-2",
-    asset_id: "asset-3",
-    asset_code: "NAC-001",
-    asset_designation: "Nacelle élévatrice JLG",
-    control_type_label: "VGP Périodique",
-    next_due_at: "2024-01-20",
-    days_remaining: -60,
-    is_overdue: true,
-    site_name: "Site Nord",
-  },
-  {
-    id: "due-3",
-    asset_id: "asset-2",
-    asset_code: "GRUE-001",
-    asset_designation: "Grue à tour Liebherr",
-    control_type_label: "VGP Périodique",
-    next_due_at: "2024-09-10",
-    days_remaining: 45,
-    is_overdue: false,
-    site_name: "Site Principal",
-  },
-];
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
 
 export const controlsRouter = createTRPCRouter({
   types: publicProcedure.query(async () => {
-    return mockControlTypes.filter((ct) => ct.active);
+    console.log("[CONTROLS] Fetching control types from database");
+    const types = await pgQuery<DbControlType>(
+      "SELECT * FROM control_types WHERE active = true ORDER BY label"
+    );
+    console.log("[CONTROLS] Found control types:", types.length);
+    return types.map((ct) => ({
+      id: ct.id,
+      code: ct.code,
+      label: ct.label,
+      description: ct.description || "",
+      periodicity_days: ct.periodicity_days,
+      active: ct.active,
+    }));
   }),
 
   getTypeById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      return mockControlTypes.find((ct) => ct.id === input.id) || null;
+      const types = await pgQuery<DbControlType>(
+        "SELECT * FROM control_types WHERE id = $1",
+        [input.id]
+      );
+      const ct = types[0];
+      if (!ct) return null;
+      return {
+        id: ct.id,
+        code: ct.code,
+        label: ct.label,
+        description: ct.description || "",
+        periodicity_days: ct.periodicity_days,
+        active: ct.active,
+      };
     }),
 
   dueEcheances: publicProcedure
@@ -92,12 +60,61 @@ export const controlsRouter = createTRPCRouter({
       }).optional()
     )
     .query(async ({ input }) => {
-      let filtered = [...mockDueEcheances];
+      console.log("[CONTROLS] Fetching due echeances with filters:", input);
+
+      let query = `
+        SELECT ac.id, ac.asset_id, ac.next_due_at,
+               a.code_interne as asset_code,
+               a.designation as asset_designation,
+               ct.label as control_type_label,
+               s.name as site_name,
+               s.id as site_id
+        FROM asset_controls ac
+        JOIN assets a ON ac.asset_id = a.id
+        JOIN control_types ct ON ac.control_type_id = ct.id
+        LEFT JOIN sites s ON a.site_id = s.id
+        WHERE ac.next_due_at IS NOT NULL
+      `;
+      const params: any[] = [];
+      let paramIndex = 1;
 
       if (input?.siteId) {
-        const siteId = input.siteId;
-        filtered = filtered.filter((d) => d.site_name.includes(siteId));
+        query += ` AND a.site_id = $${paramIndex++}`;
+        params.push(input.siteId);
       }
+
+      query += " ORDER BY ac.next_due_at ASC";
+
+      const results = await pgQuery<{
+        id: string;
+        asset_id: string;
+        next_due_at: string;
+        asset_code: string;
+        asset_designation: string;
+        control_type_label: string;
+        site_name: string;
+        site_id: string;
+      }>(query, params);
+
+      const now = new Date();
+      let filtered = results.map((r) => {
+        const nextDue = new Date(r.next_due_at);
+        const diffTime = nextDue.getTime() - now.getTime();
+        const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        return {
+          id: r.id,
+          asset_id: r.asset_id,
+          asset_code: r.asset_code,
+          asset_designation: r.asset_designation,
+          control_type_label: r.control_type_label,
+          next_due_at: r.next_due_at,
+          days_remaining: daysRemaining,
+          is_overdue: daysRemaining < 0,
+          site_name: r.site_name || "",
+        };
+      });
+
       if (input?.overdueOnly) {
         filtered = filtered.filter((d) => d.is_overdue);
       }
@@ -107,7 +124,8 @@ export const controlsRouter = createTRPCRouter({
         );
       }
 
-      return filtered.sort((a, b) => a.days_remaining - b.days_remaining);
+      console.log("[CONTROLS] Found due echeances:", filtered.length);
+      return filtered;
     }),
 
   createType: protectedProcedure
@@ -120,12 +138,17 @@ export const controlsRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const newType = {
-        id: `ct-${Date.now()}`,
+      const id = generateId();
+
+      await pgQuery(
+        "INSERT INTO control_types (id, code, label, description, periodicity_days, active) VALUES ($1, $2, $3, $4, $5, true)",
+        [id, input.code, input.label, input.description, input.periodicity_days]
+      );
+
+      return {
+        id,
         ...input,
         active: true,
       };
-      mockControlTypes.push(newType);
-      return newType;
     }),
 });

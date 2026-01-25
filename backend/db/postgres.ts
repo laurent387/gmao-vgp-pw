@@ -208,8 +208,12 @@ export async function ensurePgSchema(): Promise<void> {
       mime TEXT NOT NULL,
       sha256 TEXT,
       uploaded_at TIMESTAMPTZ NOT NULL,
-      synced BOOLEAN NOT NULL DEFAULT FALSE
+      synced BOOLEAN NOT NULL DEFAULT FALSE,
+      server_url TEXT
     );
+
+    CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_synced ON documents(synced);
 
     CREATE TABLE IF NOT EXISTS outbox (
       id TEXT PRIMARY KEY,

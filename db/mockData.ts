@@ -1,4 +1,4 @@
-import { Asset, Site, Zone, Mission, NonConformity, Report, MaintenanceLog, ControlType, CorrectiveAction, AssetStatus, SeverityLevel, NCStatus, ActionStatus, ControlConclusion, OperationType, Client } from '@/types';
+import { Asset, Site, Zone, Mission, NonConformity, Report, MaintenanceLog, ControlType, CorrectiveAction, AssetStatus, SeverityLevel, NCStatus, ActionStatus, ControlConclusion, OperationType, Client, Document } from '@/types';
 
 function formatDate(date: Date): string {
   return date.toISOString();
@@ -72,6 +72,20 @@ export const mockZones: Zone[] = [
   { id: 'zone14', site_id: 'site8', name: 'Cross-Dock' },
   { id: 'zone15', site_id: 'site9', name: 'Assemblage' },
   { id: 'zone16', site_id: 'site10', name: 'Terminal A' },
+];
+
+export const mockDocuments: Document[] = [
+  {
+    id: 'doc-1',
+    entity_type: 'nc',
+    entity_id: 'nc1',
+    local_uri: 'https://images.unsplash.com/photo-1581091215367-59ab6b9fbe93?w=1200&auto=format&fit=crop',
+    mime: 'image/jpeg',
+    sha256: null,
+    uploaded_at: formatDate(now),
+    synced: true,
+    server_url: null,
+  },
 ];
 
 interface MockMission extends Mission {

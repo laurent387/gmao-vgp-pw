@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 
 import app from "./hono";
+import { ensurePgSchema } from "./db/postgres";
 
 const portEnv = process.env.PORT;
 const port = portEnv ? Number(portEnv) : 3000;
@@ -11,9 +12,19 @@ console.log("[API] Starting Hono server", {
   hasDatabaseHost: Boolean(process.env.DATABASE_HOST),
 });
 
-serve({
-  fetch: app.fetch,
-  port,
-});
+async function main() {
+  try {
+    await ensurePgSchema();
+  } catch (e) {
+    console.error('[API] Failed to ensure Postgres schema:', e);
+  }
 
-console.log(`[API] Listening on http://0.0.0.0:${port}`);
+  serve({
+    fetch: app.fetch,
+    port,
+  });
+
+  console.log(`[API] Listening on http://0.0.0.0:${port}`);
+}
+
+main();

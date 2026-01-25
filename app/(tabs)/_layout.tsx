@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2 } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -89,6 +89,14 @@ export default function TabLayout() {
         options={{
           title: 'NC & Actions',
           tabBarIcon: ({ color, size }) => <AlertTriangle size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="interventions"
+        options={{
+          title: 'Mes interventions',
+          tabBarIcon: ({ color, size }) => <Wrench size={size} color={color} />,
+          href: isTechnician ? '/(tabs)/interventions' : null,
         }}
       />
       <Tabs.Screen

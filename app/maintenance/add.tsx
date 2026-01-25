@@ -1,11 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Linking, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Wrench, Eye, Settings, Edit3 } from 'lucide-react-native';
+import { Wrench, Eye, Settings, Edit3, User, Calendar, Mail, ChevronDown, ChevronUp } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
 import { Input } from '@/components/Input';
 import { Button } from '@/components/Button';
@@ -13,7 +13,10 @@ import { assetRepository } from '@/repositories/AssetRepository';
 import { maintenanceRepository } from '@/repositories/MaintenanceRepository';
 import { syncService } from '@/services/SyncService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 import { Asset, OperationType } from '@/types';
+import { trpc } from '@/lib/trpc';
+import { generateCalendarInviteData } from '@/utils/calendarInvite';
 
 const schema = z.object({
   assetId: z.string().min(1, 'Sélectionnez un équipement'),
@@ -21,15 +24,32 @@ const schema = z.object({
   operationType: z.enum(['MAINTENANCE', 'INSPECTION', 'REPARATION', 'MODIFICATION']),
   description: z.string().min(10, 'Description trop courte (min 10 caractères)'),
   partsRef: z.string().optional(),
+  assignedTo: z.string().optional(),
 });
 
 type FormData = z.infer<typeof schema>;
+
+interface Technician {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+}
 
 export default function AddMaintenanceScreen() {
   const { assetId: preselectedAssetId } = useLocalSearchParams<{ assetId?: string }>();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
+  const { user, hasPermission } = useAuth();
+  const { sendMaintenanceNotification } = useNotifications();
+  const [showCalendarOptions, setShowCalendarOptions] = useState(false);
+  const [calendarInviteData, setCalendarInviteData] = useState<{
+    icsContent: string;
+    outlookUrl: string;
+    googleUrl: string;
+  } | null>(null);
+
+  const isManagerOrAdmin = hasPermission(['ADMIN', 'HSE_MANAGER']);
 
   const { control, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -39,10 +59,12 @@ export default function AddMaintenanceScreen() {
       operationType: 'MAINTENANCE',
       description: '',
       partsRef: '',
+      assignedTo: '',
     },
   });
 
   const selectedOperationType = watch('operationType');
+  const selectedTechnicianId = watch('assignedTo');
 
   const { data: assets } = useQuery<Asset[]>({
     queryKey: ['assets-for-maintenance'],
@@ -55,6 +77,12 @@ export default function AddMaintenanceScreen() {
     queryFn: () => assetRepository.getByIdWithDetails(preselectedAssetId!),
     enabled: !!preselectedAssetId,
   });
+
+  const { data: technicians } = trpc.auth.listTechnicians.useQuery(undefined, {
+    enabled: isManagerOrAdmin,
+  });
+
+  const selectedTechnician = technicians?.find(t => t.id === selectedTechnicianId);
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -71,15 +99,56 @@ export default function AddMaintenanceScreen() {
         logId,
         ...data,
         actor: user?.name,
+        assigned_to: data.assignedTo || null,
       });
 
-      return logId;
+      return { logId, data };
     },
-    onSuccess: () => {
+    onSuccess: async ({ logId, data }) => {
       queryClient.invalidateQueries({ queryKey: ['asset-maintenance'] });
-      Alert.alert('Succès', 'Entrée de maintenance ajoutée', [
-        { text: 'OK', onPress: () => router.back() }
-      ]);
+      queryClient.invalidateQueries({ queryKey: ['technician-interventions'] });
+
+      const assetInfo = selectedAsset || assets?.find(a => a.id === data.assetId);
+      const technicianInfo = technicians?.find(t => t.id === data.assignedTo);
+
+      if (data.assignedTo && technicianInfo && assetInfo) {
+        const calendarData = generateCalendarInviteData({
+          assetDesignation: assetInfo.designation,
+          operationType: data.operationType,
+          date: data.date,
+          description: data.description,
+          technicianName: technicianInfo.name,
+          siteName: assetInfo.site_name,
+        });
+
+        setCalendarInviteData(calendarData);
+
+        await sendMaintenanceNotification({
+          technicianName: technicianInfo.name,
+          assetDesignation: assetInfo.designation,
+          date: data.date,
+          maintenanceId: logId,
+          assetId: data.assetId,
+          operationType: data.operationType,
+          calendarInviteUrl: calendarData.outlookUrl,
+        });
+
+        Alert.alert(
+          'Intervention planifiée',
+          `L'intervention a été assignée à ${technicianInfo.name}.\n\nUne notification a été envoyée et l'intervention a été ajoutée à son calendrier.`,
+          [
+            {
+              text: 'Envoyer invitation calendrier',
+              onPress: () => setShowCalendarOptions(true),
+            },
+            { text: 'Terminer', onPress: () => router.back() },
+          ]
+        );
+      } else {
+        Alert.alert('Succès', 'Entrée de maintenance ajoutée', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
+      }
     },
     onError: (error) => {
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Erreur lors de la création');
@@ -88,6 +157,24 @@ export default function AddMaintenanceScreen() {
 
   const onSubmit = (data: FormData) => {
     createMutation.mutate(data);
+  };
+
+  const openCalendarLink = async (type: 'outlook' | 'google') => {
+    if (!calendarInviteData) return;
+    
+    const url = type === 'outlook' ? calendarInviteData.outlookUrl : calendarInviteData.googleUrl;
+    
+    try {
+      const canOpen = await Linking.canOpenURL(url);
+      if (canOpen) {
+        await Linking.openURL(url);
+      } else {
+        Alert.alert('Erreur', 'Impossible d\'ouvrir le lien');
+      }
+    } catch (e) {
+      console.error('Error opening calendar link:', e);
+      Alert.alert('Erreur', 'Impossible d\'ouvrir le lien du calendrier');
+    }
   };
 
   const operationTypes: { type: OperationType; label: string; icon: React.ReactNode }[] = [
@@ -180,6 +267,68 @@ export default function AddMaintenanceScreen() {
             )}
           />
 
+          {isManagerOrAdmin && (
+            <>
+              <Text style={styles.label}>Technicien assigné</Text>
+              <Controller
+                control={control}
+                name="assignedTo"
+                render={({ field: { onChange, value } }) => (
+                  <View style={styles.technicianSection}>
+                    {technicians?.map((tech) => (
+                      <TouchableOpacity
+                        key={tech.id}
+                        style={[
+                          styles.technicianOption,
+                          value === tech.id && styles.technicianOptionSelected,
+                        ]}
+                        onPress={() => onChange(value === tech.id ? '' : tech.id)}
+                      >
+                        <View style={[
+                          styles.technicianAvatar,
+                          value === tech.id && styles.technicianAvatarSelected,
+                        ]}>
+                          <User size={20} color={value === tech.id ? colors.textInverse : colors.primary} />
+                        </View>
+                        <View style={styles.technicianInfo}>
+                          <Text style={[
+                            styles.technicianName,
+                            value === tech.id && styles.technicianNameSelected,
+                          ]}>
+                            {tech.name}
+                          </Text>
+                          <Text style={styles.technicianEmail}>{tech.email}</Text>
+                        </View>
+                        {value === tech.id && (
+                          <View style={styles.selectedBadge}>
+                            <Text style={styles.selectedBadgeText}>Assigné</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                    {(!technicians || technicians.length === 0) && (
+                      <Text style={styles.noTechnicians}>Aucun technicien disponible</Text>
+                    )}
+                  </View>
+                )}
+              />
+
+              {selectedTechnician && (
+                <View style={styles.notificationInfo}>
+                  <View style={styles.notificationHeader}>
+                    <Mail size={16} color={colors.info} />
+                    <Text style={styles.notificationTitle}>Notifications</Text>
+                  </View>
+                  <Text style={styles.notificationText}>
+                    • Notification push envoyée au technicien{'\n'}
+                    • Notification in-app avec détails{'\n'}
+                    • Invitation calendrier (Outlook/Google)
+                  </Text>
+                </View>
+              )}
+            </>
+          )}
+
           <Controller
             control={control}
             name="description"
@@ -210,8 +359,47 @@ export default function AddMaintenanceScreen() {
           />
         </View>
 
+        {showCalendarOptions && calendarInviteData && (
+          <View style={styles.calendarSection}>
+            <TouchableOpacity
+              style={styles.calendarHeader}
+              onPress={() => setShowCalendarOptions(!showCalendarOptions)}
+            >
+              <Calendar size={20} color={colors.primary} />
+              <Text style={styles.calendarTitle}>Envoyer invitation calendrier</Text>
+              {showCalendarOptions ? (
+                <ChevronUp size={20} color={colors.textMuted} />
+              ) : (
+                <ChevronDown size={20} color={colors.textMuted} />
+              )}
+            </TouchableOpacity>
+            
+            <View style={styles.calendarOptions}>
+              <TouchableOpacity
+                style={styles.calendarOption}
+                onPress={() => openCalendarLink('outlook')}
+              >
+                <View style={[styles.calendarIcon, { backgroundColor: '#0078D4' }]}>
+                  <Text style={styles.calendarIconText}>O</Text>
+                </View>
+                <Text style={styles.calendarOptionText}>Outlook / Office 365</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.calendarOption}
+                onPress={() => openCalendarLink('google')}
+              >
+                <View style={[styles.calendarIcon, { backgroundColor: '#4285F4' }]}>
+                  <Text style={styles.calendarIconText}>G</Text>
+                </View>
+                <Text style={styles.calendarOptionText}>Google Calendar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         <Button
-          title="Enregistrer"
+          title={isManagerOrAdmin && selectedTechnicianId ? "Planifier et notifier" : "Enregistrer"}
           onPress={handleSubmit(onSubmit)}
           loading={createMutation.isPending}
           fullWidth
@@ -320,6 +508,142 @@ const styles = StyleSheet.create({
   operationLabelSelected: {
     color: colors.primary,
     fontWeight: '600' as const,
+  },
+  technicianSection: {
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  technicianOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    gap: spacing.md,
+  },
+  technicianOptionSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '10',
+  },
+  technicianAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  technicianAvatarSelected: {
+    backgroundColor: colors.primary,
+  },
+  technicianInfo: {
+    flex: 1,
+  },
+  technicianName: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  technicianNameSelected: {
+    color: colors.primary,
+  },
+  technicianEmail: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  selectedBadge: {
+    backgroundColor: colors.success,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: borderRadius.sm,
+  },
+  selectedBadgeText: {
+    fontSize: typography.caption.fontSize,
+    fontWeight: '600' as const,
+    color: colors.textInverse,
+  },
+  noTechnicians: {
+    fontSize: typography.body.fontSize,
+    color: colors.textMuted,
+    textAlign: 'center',
+    padding: spacing.lg,
+  },
+  notificationInfo: {
+    backgroundColor: colors.info + '10',
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    marginBottom: spacing.lg,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.info,
+  },
+  notificationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  notificationTitle: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '600' as const,
+    color: colors.info,
+  },
+  notificationText: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textSecondary,
+    lineHeight: 20,
+  },
+  calendarSection: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  calendarTitle: {
+    flex: 1,
+    fontSize: typography.body.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  calendarOptions: {
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  calendarOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.background,
+  },
+  calendarIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarIconText: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  calendarOptionText: {
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+    fontWeight: '500' as const,
   },
   error: {
     fontSize: typography.caption.fontSize,

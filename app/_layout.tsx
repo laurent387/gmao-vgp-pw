@@ -5,6 +5,7 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { DatabaseProvider, useDatabase } from "@/contexts/DatabaseContext";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { colors } from "@/constants/theme";
 import { View, Text, ActivityIndicator, StyleSheet } from "react-native";
 import { trpc, trpcClient } from "@/lib/trpc";
@@ -94,7 +95,9 @@ export default function RootLayout() {
         <GestureHandlerRootView style={{ flex: 1 }}>
           <DatabaseProvider>
             <AuthProvider>
-              <RootLayoutNav />
+              <NotificationProvider>
+                <RootLayoutNav />
+              </NotificationProvider>
             </AuthProvider>
           </DatabaseProvider>
         </GestureHandlerRootView>

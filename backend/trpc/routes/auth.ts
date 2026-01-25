@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "../create-context";
 
-const mockUsers = [
+export const mockUsers = [
   {
     id: "user-1",
     email: "technicien@inspectra.fr",
@@ -80,5 +80,25 @@ export const authRouter = createTRPCRouter({
       name: user.name,
       role: user.role,
     };
+  }),
+
+  listTechnicians: publicProcedure.query(async () => {
+    return mockUsers
+      .filter((u) => u.role === "TECHNICIAN")
+      .map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+      }));
+  }),
+
+  listUsers: publicProcedure.query(async () => {
+    return mockUsers.map((u) => ({
+      id: u.id,
+      name: u.name,
+      email: u.email,
+      role: u.role,
+    }));
   }),
 });

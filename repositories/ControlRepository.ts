@@ -2,7 +2,7 @@ import { getDatabase } from '@/db/database';
 import { ControlType, AssetControl, ChecklistTemplate, ChecklistItem, DueEcheance } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockAssets, mockControlTypes } from '@/db/mockData';
+import { webApiService } from '@/services/WebApiService';
 import { getChecklistTemplateForWeb, getChecklistItemsForWebTemplateId } from '@/db/checklistCatalog';
 
 export class ControlTypeRepository extends BaseRepository<ControlType> {
@@ -12,7 +12,7 @@ export class ControlTypeRepository extends BaseRepository<ControlType> {
 
   async getActive(): Promise<ControlType[]> {
     if (Platform.OS === 'web') {
-      return mockControlTypes.filter(ct => ct.active);
+      return webApiService.getControlTypes();
     }
 
     const db = await getDatabase();
@@ -39,7 +39,14 @@ export class AssetControlRepository extends BaseRepository<AssetControl> {
   }
 
   async getDueEcheances(filters?: { siteId?: string; overdue?: boolean; dueSoon?: number }): Promise<DueEcheance[]> {
-    if (Platform.OS === 'web') return [];
+    if (Platform.OS === 'web') {
+      const echeances = await webApiService.getDueEcheances({
+        siteId: filters?.siteId,
+        overdueOnly: filters?.overdue,
+        dueSoonDays: filters?.dueSoon,
+      });
+      return echeances as DueEcheance[];
+    }
     
     const db = await getDatabase();
     
@@ -121,20 +128,7 @@ export class ChecklistTemplateRepository extends BaseRepository<ChecklistTemplat
 
   async getByControlType(controlTypeId: string, assetCategory?: string): Promise<ChecklistTemplate | null> {
     if (Platform.OS === 'web') {
-      if (!assetCategory) {
-        return getChecklistTemplateForWeb(controlTypeId, undefined);
-      }
-
-      const categoriesAvailable = new Set(mockAssets.map(a => a.categorie).filter(Boolean));
-      const normalized = categoriesAvailable.has(assetCategory)
-        ? assetCategory
-        : categoriesAvailable.has(assetCategory.toLowerCase())
-          ? assetCategory.toLowerCase()
-          : categoriesAvailable.has(assetCategory.toUpperCase())
-            ? assetCategory.toUpperCase()
-            : assetCategory;
-
-      const withCategory = getChecklistTemplateForWeb(controlTypeId, normalized);
+      const withCategory = getChecklistTemplateForWeb(controlTypeId, assetCategory);
       return withCategory ?? getChecklistTemplateForWeb(controlTypeId, undefined);
     }
 

@@ -226,12 +226,8 @@ export default function InventoryScreen() {
     );
   };
 
-  if (isLoading) {
-    return <LoadingState message="Chargement des équipements..." />;
-  }
-
-  return (
-    <View style={styles.container}>
+  const renderListHeader = () => (
+    <View>
       <View style={styles.header}>
         <View style={styles.searchRow}>
           <SearchInput
@@ -402,12 +398,21 @@ export default function InventoryScreen() {
           {assets?.length ?? 0} équipement{(assets?.length ?? 0) !== 1 ? 's' : ''}
         </Text>
       </View>
+    </View>
+  );
 
+  if (isLoading) {
+    return <LoadingState message="Chargement des équipements..." />;
+  }
+
+  return (
+    <View style={styles.container}>
       <FlatList
         data={assets}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        ListHeaderComponent={renderListHeader}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -638,8 +643,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   listContent: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
     flexGrow: 1,
   },
 });

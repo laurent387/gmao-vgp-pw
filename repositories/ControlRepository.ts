@@ -2,6 +2,8 @@ import { getDatabase } from '@/db/database';
 import { ControlType, AssetControl, ChecklistTemplate, ChecklistItem, DueEcheance } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
+import { mockAssets, mockControlTypes } from '@/db/mockData';
+import { getChecklistTemplateForWeb, getChecklistItemsForWebTemplateId } from '@/db/checklistCatalog';
 
 export class ControlTypeRepository extends BaseRepository<ControlType> {
   constructor() {
@@ -9,8 +11,10 @@ export class ControlTypeRepository extends BaseRepository<ControlType> {
   }
 
   async getActive(): Promise<ControlType[]> {
-    if (Platform.OS === 'web') return [];
-    
+    if (Platform.OS === 'web') {
+      return mockControlTypes.filter(ct => ct.active);
+    }
+
     const db = await getDatabase();
     return db.getAllAsync<ControlType>('SELECT * FROM control_types WHERE active = 1 ORDER BY label');
   }
@@ -116,8 +120,24 @@ export class ChecklistTemplateRepository extends BaseRepository<ChecklistTemplat
   }
 
   async getByControlType(controlTypeId: string, assetCategory?: string): Promise<ChecklistTemplate | null> {
-    if (Platform.OS === 'web') return null;
-    
+    if (Platform.OS === 'web') {
+      if (!assetCategory) {
+        return getChecklistTemplateForWeb(controlTypeId, undefined);
+      }
+
+      const categoriesAvailable = new Set(mockAssets.map(a => a.categorie).filter(Boolean));
+      const normalized = categoriesAvailable.has(assetCategory)
+        ? assetCategory
+        : categoriesAvailable.has(assetCategory.toLowerCase())
+          ? assetCategory.toLowerCase()
+          : categoriesAvailable.has(assetCategory.toUpperCase())
+            ? assetCategory.toUpperCase()
+            : assetCategory;
+
+      const withCategory = getChecklistTemplateForWeb(controlTypeId, normalized);
+      return withCategory ?? getChecklistTemplateForWeb(controlTypeId, undefined);
+    }
+
     const db = await getDatabase();
     
     let template = await db.getFirstAsync<ChecklistTemplate>(
@@ -142,8 +162,10 @@ export class ChecklistItemRepository extends BaseRepository<ChecklistItem> {
   }
 
   async getByTemplateId(templateId: string): Promise<ChecklistItem[]> {
-    if (Platform.OS === 'web') return [];
-    
+    if (Platform.OS === 'web') {
+      return getChecklistItemsForWebTemplateId(templateId);
+    }
+
     const db = await getDatabase();
     return db.getAllAsync<ChecklistItem>(
       'SELECT * FROM checklist_items WHERE template_id = ? ORDER BY sort_order',

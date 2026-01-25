@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, X, Minus, Camera, AlertTriangle } from 'lucide-react-native';
+import { Check, X, Minus, AlertTriangle } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -11,8 +11,7 @@ import { assetRepository } from '@/repositories/AssetRepository';
 import { checklistTemplateRepository, checklistItemRepository, controlTypeRepository, assetControlRepository } from '@/repositories/ControlRepository';
 import { missionRepository } from '@/repositories/MissionRepository';
 import { reportRepository } from '@/repositories/ReportRepository';
-import { ncRepository } from '@/repositories/NCRepository';
-import { actionRepository } from '@/repositories/NCRepository';
+import { ncRepository, actionRepository } from '@/repositories/NCRepository';
 import { syncService } from '@/services/SyncService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Asset, ChecklistItem, ChecklistItemStatus, ControlConclusion, ControlType } from '@/types';
@@ -327,7 +326,7 @@ export default function ExecuteControlScreen() {
               {attestation && <Check size={16} color={colors.textInverse} />}
             </View>
             <Text style={styles.attestationText}>
-              J'atteste avoir effectué ce contrôle conformément aux procédures en vigueur
+              {"J'atteste avoir effectué ce contrôle conformément aux procédures en vigueur"}
             </Text>
           </TouchableOpacity>
         </View>

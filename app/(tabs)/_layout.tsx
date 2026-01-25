@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -104,6 +104,14 @@ export default function TabLayout() {
         options={{
           title: 'Sync',
           tabBarIcon: ({ color, size }) => <RefreshCw size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="admin"
+        options={{
+          title: 'Admin',
+          tabBarIcon: ({ color, size }) => <Settings size={size} color={color} />,
+          href: isManager ? '/(tabs)/admin' : null,
         }}
       />
     </Tabs>

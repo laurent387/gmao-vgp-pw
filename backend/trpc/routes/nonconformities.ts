@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
+import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
 
 interface DbNC {
@@ -131,7 +131,7 @@ export const ncRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
+  create: mutationProcedure
     .input(
       z.object({
         report_id: z.string().optional(),
@@ -165,7 +165,7 @@ export const ncRouter = createTRPCRouter({
       };
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: mutationProcedure
     .input(
       z.object({
         id: z.string(),
@@ -196,7 +196,7 @@ export const ncRouter = createTRPCRouter({
       return actions;
     }),
 
-  createAction: protectedProcedure
+  createAction: mutationProcedure
     .input(
       z.object({
         nonconformity_id: z.string(),
@@ -226,7 +226,7 @@ export const ncRouter = createTRPCRouter({
       };
     }),
 
-  updateActionStatus: protectedProcedure
+  updateActionStatus: mutationProcedure
     .input(
       z.object({
         id: z.string(),

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
+import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
 
 interface DbMission {
@@ -114,7 +114,7 @@ export const missionsRouter = createTRPCRouter({
       };
     }),
 
-  create: protectedProcedure
+  create: mutationProcedure
     .input(
       z.object({
         control_type_id: z.string(),
@@ -158,7 +158,7 @@ export const missionsRouter = createTRPCRouter({
       };
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: mutationProcedure
     .input(
       z.object({
         id: z.string(),

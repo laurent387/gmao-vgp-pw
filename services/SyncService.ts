@@ -1,10 +1,10 @@
 import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
-import * as FileSystem from 'expo-file-system';
 
 import { outboxRepository } from '@/repositories/OutboxRepository';
 import { documentRepository } from '@/repositories/DocumentRepository';
 import { OutboxItem } from '@/types';
+import { trpcClient } from '@/lib/trpc';
 
 export interface SyncResult {
   success: boolean;
@@ -37,18 +37,75 @@ class SyncService {
       const pendingItems = await outboxRepository.getPending();
       console.log(`[SYNC] Found ${pendingItems.length} pending items`);
 
+      if (pendingItems.length === 0) {
+        console.log('[SYNC] No items to sync');
+        return result;
+      }
+
+      const itemsForUpload: OutboxItem[] = [];
+      const itemsForTrpc: OutboxItem[] = [];
+
       for (const item of pendingItems) {
+        if (item.type === 'UPLOAD_DOCUMENT') {
+          itemsForUpload.push(item);
+        } else {
+          itemsForTrpc.push(item);
+        }
+      }
+
+      if (itemsForUpload.length > 0) {
+        console.log(`[SYNC] Processing ${itemsForUpload.length} document uploads`);
+        for (const item of itemsForUpload) {
+          try {
+            await this.uploadDocument(JSON.parse(item.payload_json));
+            await outboxRepository.markSent(item.id);
+            result.processed++;
+            console.log(`[SYNC] Uploaded document ${item.id}`);
+          } catch (e) {
+            const error = e instanceof Error ? e.message : 'Unknown error';
+            await outboxRepository.markError(item.id, error);
+            result.failed++;
+            result.errors.push(`Document upload: ${error}`);
+            console.error(`[SYNC] Document upload failed ${item.id}:`, error);
+          }
+        }
+      }
+
+      if (itemsForTrpc.length > 0) {
+        console.log(`[SYNC] Processing ${itemsForTrpc.length} items via tRPC`);
+
+        const syncItems = itemsForTrpc.map((item) => ({
+          id: item.id,
+          type: item.type,
+          payload: JSON.parse(item.payload_json),
+        }));
+
         try {
-          await this.processItem(item);
-          await outboxRepository.markSent(item.id);
-          result.processed++;
-          console.log(`[SYNC] Processed item ${item.id} (${item.type})`);
+          const response = await trpcClient.sync.push.mutate({ items: syncItems });
+          console.log('[SYNC] tRPC push response:', response);
+
+          for (const itemResult of response.results) {
+            const originalItem = itemsForTrpc.find((i) => i.id === itemResult.id);
+            if (!originalItem) continue;
+
+            if (itemResult.success) {
+              await outboxRepository.markSent(itemResult.id);
+              result.processed++;
+            } else {
+              await outboxRepository.markError(itemResult.id, itemResult.error || 'Unknown error');
+              result.failed++;
+              result.errors.push(`${originalItem.type}: ${itemResult.error}`);
+            }
+          }
         } catch (e) {
           const error = e instanceof Error ? e.message : 'Unknown error';
-          await outboxRepository.markError(item.id, error);
-          result.failed++;
-          result.errors.push(`${item.type}: ${error}`);
-          console.error(`[SYNC] Failed item ${item.id}:`, error);
+          console.error('[SYNC] tRPC push failed:', error);
+
+          for (const item of itemsForTrpc) {
+            await outboxRepository.markError(item.id, error);
+            result.failed++;
+          }
+          result.errors.push(`Sync batch failed: ${error}`);
         }
       }
 
@@ -66,21 +123,34 @@ class SyncService {
     return result;
   }
 
-  private async processItem(item: OutboxItem): Promise<void> {
-    const payload: any = JSON.parse(item.payload_json);
+  async pull(lastSyncAt?: string): Promise<{ timestamp: string; changes: Record<string, any[]> }> {
+    console.log('[SYNC] Pulling changes since:', lastSyncAt || 'beginning');
 
-    console.log(`[SYNC] Processing ${item.type}:`, payload);
+    try {
+      const response = await trpcClient.sync.pull.query({
+        lastSyncAt,
+        entities: [
+          'users',
+          'sites',
+          'zones',
+          'assets',
+          'controlTypes',
+          'missions',
+          'nonconformities',
+          'correctiveActions',
+          'reports',
+          'maintenanceLogs',
+          'checklistTemplates',
+          'checklistItems',
+        ],
+      });
 
-    if (item.type === 'UPLOAD_DOCUMENT') {
-      await this.uploadDocument(payload);
-      return;
-    }
-
-    await new Promise(resolve => setTimeout(resolve, 250));
-
-    const shouldFail = Math.random() < 0.05;
-    if (shouldFail) {
-      throw new Error('Network error (simulated)');
+      console.log('[SYNC] Pull complete, timestamp:', response.timestamp);
+      return response;
+    } catch (e) {
+      const error = e instanceof Error ? e.message : 'Unknown error';
+      console.error('[SYNC] Pull failed:', error);
+      throw e;
     }
   }
 
@@ -116,6 +186,7 @@ class SyncService {
     const doc = await documentRepository.getById(documentId);
     if (!doc) throw new Error(`Document not found: ${documentId}`);
 
+    const FileSystem = require('expo-file-system');
     const info = await FileSystem.getInfoAsync(doc.local_uri);
     if (!info.exists) throw new Error('Local file missing');
 
@@ -182,6 +253,20 @@ class SyncService {
 
   async retryFailedItems(): Promise<void> {
     await outboxRepository.retryErrors();
+  }
+
+  async getStatus(): Promise<{ serverTime: string; version: string; status: string; database: string }> {
+    try {
+      return await trpcClient.sync.status.query();
+    } catch (e) {
+      console.error('[SYNC] Status check failed:', e);
+      return {
+        serverTime: new Date().toISOString(),
+        version: 'unknown',
+        status: 'offline',
+        database: 'unknown',
+      };
+    }
   }
 }
 

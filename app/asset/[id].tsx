@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Info, ClipboardCheck, AlertTriangle, Wrench, FileText, 
-  ChevronRight, Calendar, MapPin, Tag 
+  ChevronRight, Calendar, MapPin, Tag, Camera 
 } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { StatusBadge, OverdueBadge, CriticalityBadge } from '@/components/Badge';
@@ -16,13 +16,16 @@ import { assetControlRepository } from '@/repositories/ControlRepository';
 import { reportRepository } from '@/repositories/ReportRepository';
 import { ncRepository } from '@/repositories/NCRepository';
 import { maintenanceRepository } from '@/repositories/MaintenanceRepository';
-import { Asset, AssetControl, Report, NonConformity, MaintenanceLog } from '@/types';
+import { Asset, AssetControl, Report, NonConformity, MaintenanceLog, Document } from '@/types';
+import { DocumentList } from '@/components/DocumentPicker';
+import { useAuth } from '@/contexts/AuthContext';
 
 type TabType = 'info' | 'controls' | 'actions' | 'maintenance' | 'documents';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { isReadOnly } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -80,6 +83,7 @@ export default function AssetDetailScreen() {
     { key: 'controls', label: 'Contrôles', icon: <ClipboardCheck size={18} color={activeTab === 'controls' ? colors.primary : colors.textMuted} /> },
     { key: 'actions', label: 'NC/Actions', icon: <AlertTriangle size={18} color={activeTab === 'actions' ? colors.primary : colors.textMuted} /> },
     { key: 'maintenance', label: 'Maintenance', icon: <Wrench size={18} color={activeTab === 'maintenance' ? colors.primary : colors.textMuted} /> },
+    { key: 'documents', label: 'Photos', icon: <Camera size={18} color={activeTab === 'documents' ? colors.primary : colors.textMuted} /> },
   ];
 
   const formatDate = (date: string | null) => {
@@ -214,12 +218,14 @@ export default function AssetDetailScreen() {
       <SectionCard 
         title="Non-conformités & Actions"
         action={
-          <Button
-            title="Nouvelle NC"
-            onPress={() => router.push({ pathname: '/nc/create', params: { assetId: id } })}
-            size="sm"
-            variant="outline"
-          />
+          !isReadOnly() && (
+            <Button
+              title="Nouvelle NC"
+              onPress={() => router.push({ pathname: '/nc/create', params: { assetId: id } })}
+              size="sm"
+              variant="outline"
+            />
+          )
         }
       >
         {ncs && ncs.length > 0 ? (
@@ -252,17 +258,31 @@ export default function AssetDetailScreen() {
     </View>
   );
 
+  const renderDocumentsTab = () => (
+    <View style={styles.tabContent}>
+      <SectionCard title="Photos & Documents">
+        <DocumentList
+          entityType="asset"
+          entityId={id!}
+          readOnly={isReadOnly()}
+        />
+      </SectionCard>
+    </View>
+  );
+
   const renderMaintenanceTab = () => (
     <View style={styles.tabContent}>
       <SectionCard 
         title="Carnet de maintenance"
         action={
-          <Button
-            title="Ajouter"
-            onPress={() => router.push({ pathname: '/maintenance/add', params: { assetId: id } })}
-            size="sm"
-            variant="outline"
-          />
+          !isReadOnly() && (
+            <Button
+              title="Ajouter"
+              onPress={() => router.push({ pathname: '/maintenance/add', params: { assetId: id } })}
+              size="sm"
+              variant="outline"
+            />
+          )
         }
       >
         {maintenanceLogs && maintenanceLogs.length > 0 ? (
@@ -336,6 +356,7 @@ export default function AssetDetailScreen() {
         {activeTab === 'controls' && renderControlsTab()}
         {activeTab === 'actions' && renderActionsTab()}
         {activeTab === 'maintenance' && renderMaintenanceTab()}
+        {activeTab === 'documents' && renderDocumentsTab()}
       </ScrollView>
     </>
   );

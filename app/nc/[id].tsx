@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight, Camera, Image as ImageIcon, Trash2, Upload } from 'lucide-react-native';
+import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight, Camera, Image as ImageIcon, Trash2, Upload, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'expo-image';
@@ -16,13 +16,21 @@ import { ncRepository, actionRepository } from '@/repositories/NCRepository';
 import { documentRepository } from '@/repositories/DocumentRepository';
 import { syncService } from '@/services/SyncService';
 import { useAuth } from '@/contexts/AuthContext';
-import { Document, NonConformity, ActionStatus } from '@/types';
+import { Document, NonConformity, ActionStatus, CorrectiveAction } from '@/types';
+import { Input } from '@/components/Input';
+import { Modal, TextInput } from 'react-native';
 
 export default function NCDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { user, canValidate, canEdit } = useAuth();
+  const { user, canValidate, canEdit, isReadOnly } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
+  const [showActionModal, setShowActionModal] = useState(false);
+  const [actionForm, setActionForm] = useState({
+    owner: '',
+    description: '',
+    due_at: '',
+  });
 
   const { data: nc, isLoading, refetch } = useQuery<NonConformity | null>({
     queryKey: ['nc', id],
@@ -37,6 +45,53 @@ export default function NCDetailScreen() {
       return documentRepository.getByEntity('nc', id);
     },
     enabled: !!id,
+  });
+
+  const createActionMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('NC inconnue');
+      if (!actionForm.owner || !actionForm.due_at) throw new Error('Responsable et échéance requis');
+
+      const actionId = `action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const now = new Date().toISOString();
+
+      const newAction: CorrectiveAction = {
+        id: actionId,
+        nonconformity_id: id,
+        owner: actionForm.owner,
+        description: actionForm.description,
+        due_at: actionForm.due_at,
+        status: 'OUVERTE',
+        closed_at: null,
+        validated_by: null,
+      };
+
+      await actionRepository.create(newAction);
+      await ncRepository.updateStatus(id, 'EN_COURS');
+
+      await syncService.addToOutbox('CREATE_NC', {
+        id: id,
+        asset_id: nc?.asset_id,
+        title: nc?.title,
+        description: nc?.description,
+        severity: nc?.severity,
+        status: 'EN_COURS',
+        corrective_action: newAction,
+      });
+
+      return newAction;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nc', id] });
+      queryClient.invalidateQueries({ queryKey: ['nonconformities'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+      setShowActionModal(false);
+      setActionForm({ owner: '', description: '', due_at: '' });
+      Alert.alert('Succès', 'Action corrective créée');
+    },
+    onError: (error) => {
+      Alert.alert('Erreur', error instanceof Error ? error.message : 'Erreur');
+    },
   });
 
   const updateActionMutation = useMutation({
@@ -380,16 +435,78 @@ export default function NCDetailScreen() {
             </SectionCard>
           )}
 
-          {!action && canEdit() && (
+          {!action && canEdit() && !isReadOnly() && (
             <View style={styles.noAction}>
               <Text style={styles.noActionText}>Aucune action corrective définie</Text>
               <Button
                 title="Créer une action"
-                onPress={() => {}}
+                onPress={() => setShowActionModal(true)}
                 variant="outline"
+                icon={<Plus size={18} color={colors.primary} />}
               />
             </View>
           )}
+
+          <Modal visible={showActionModal} transparent animationType="slide">
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContainer}>
+                <Text style={styles.modalTitle}>Nouvelle action corrective</Text>
+                
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Responsable *</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={actionForm.owner}
+                    onChangeText={(text) => setActionForm({ ...actionForm, owner: text })}
+                    placeholder="Nom du responsable"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Description</Text>
+                  <TextInput
+                    style={[styles.modalInput, styles.modalInputMulti]}
+                    value={actionForm.description}
+                    onChangeText={(text) => setActionForm({ ...actionForm, description: text })}
+                    placeholder="Description de l'action à réaliser"
+                    placeholderTextColor={colors.textMuted}
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+
+                <View style={styles.modalField}>
+                  <Text style={styles.modalLabel}>Échéance * (AAAA-MM-JJ)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={actionForm.due_at}
+                    onChangeText={(text) => setActionForm({ ...actionForm, due_at: text })}
+                    placeholder="2025-02-15"
+                    placeholderTextColor={colors.textMuted}
+                  />
+                </View>
+
+                <View style={styles.modalButtons}>
+                  <Button
+                    title="Annuler"
+                    onPress={() => {
+                      setShowActionModal(false);
+                      setActionForm({ owner: '', description: '', due_at: '' });
+                    }}
+                    variant="outline"
+                    style={{ flex: 1 }}
+                  />
+                  <Button
+                    title="Créer"
+                    onPress={() => createActionMutation.mutate()}
+                    loading={createActionMutation.isPending}
+                    style={{ flex: 1 }}
+                  />
+                </View>
+              </View>
+            </View>
+          </Modal>
         </View>
       </ScrollView>
       )}
@@ -580,5 +697,49 @@ const styles = StyleSheet.create({
     fontSize: typography.body.fontSize,
     color: colors.textMuted,
     marginBottom: spacing.md,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  modalContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  modalTitle: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  modalField: {
+    marginBottom: spacing.md,
+  },
+  modalLabel: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '500' as const,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  modalInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+  },
+  modalInputMulti: {
+    minHeight: 80,
+    textAlignVertical: 'top' as const,
+  },
+  modalButtons: {
+    flexDirection: 'row' as const,
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
 });

@@ -271,117 +271,123 @@ export default function InventoryScreen() {
             )}
           </View>
 
-          <View style={styles.filterSection}>
-            <View style={styles.filterSectionHeader}>
-              <Building2 size={16} color={colors.textSecondary} />
-              <Text style={styles.filterSectionTitle}>Client</Text>
-            </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              contentContainerStyle={styles.chipsScroll}
-            >
-              {(clients ?? [])
-                .slice()
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((client) => (
-                  <FilterChip
-                    key={client.id}
-                    label={client.name}
-                    selected={filters.clientId === client.id}
-                    onPress={() => toggleClientFilter(client.id)}
-                  />
-                ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.filterSection}>
-            <View style={styles.filterSectionHeader}>
-              <MapPin size={16} color={colors.textSecondary} />
-              <Text style={styles.filterSectionTitle}>Site</Text>
-              {filters.clientId && (
-                <Text style={styles.filterSectionHint}>
-                  ({sitesForSelectedClient.length} disponibles)
-                </Text>
-              )}
-            </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              contentContainerStyle={styles.chipsScroll}
-            >
-              {sitesForSelectedClient.length === 0 ? (
-                <Text style={styles.noDataText}>Sélectionnez un client</Text>
-              ) : (
-                sitesForSelectedClient
-                  .slice()
-                  .sort((a, b) => a.name.localeCompare(b.name))
-                  .map((site) => (
-                    <FilterChip
-                      key={site.id}
-                      label={site.name}
-                      selected={filters.siteId === site.id}
-                      onPress={() => toggleSiteFilter(site.id)}
-                    />
-                  ))
-              )}
-            </ScrollView>
-          </View>
-
-          <View style={styles.filterSection}>
-            <Text style={styles.filterSectionTitle}>Statut</Text>
-            <View style={styles.statusChipsContainer}>
-              {(Object.keys(STATUS_CONFIG) as AssetStatus[]).map((status) => {
-                const config = STATUS_CONFIG[status];
-                const isSelected = filters.statut === status;
-                return (
-                  <TouchableOpacity
-                    key={status}
-                    onPress={() => toggleStatusFilter(status)}
-                    activeOpacity={0.7}
-                    style={[
-                      styles.statusChip,
-                      { 
-                        backgroundColor: isSelected ? config.color : config.bgColor,
-                        borderColor: config.color,
-                      },
-                    ]}
-                  >
-                    <View style={[
-                      styles.statusDot,
-                      { backgroundColor: isSelected ? colors.textInverse : config.color }
-                    ]} />
-                    <Text style={[
-                      styles.statusChipText,
-                      { color: isSelected ? colors.textInverse : config.color }
-                    ]}>
-                      {config.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          </View>
-
-          {categories && categories.length > 0 && (
+          <ScrollView 
+            style={styles.filtersScrollView}
+            showsVerticalScrollIndicator={true}
+            nestedScrollEnabled={true}
+          >
             <View style={styles.filterSection}>
-              <Text style={styles.filterSectionTitle}>Catégorie</Text>
+              <View style={styles.filterSectionHeader}>
+                <Building2 size={16} color={colors.textSecondary} />
+                <Text style={styles.filterSectionTitle}>Client</Text>
+              </View>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
                 contentContainerStyle={styles.chipsScroll}
               >
-                {categories.map((cat) => (
-                  <FilterChip
-                    key={cat}
-                    label={cat}
-                    selected={filters.categorie === cat}
-                    onPress={() => toggleCategoryFilter(cat)}
-                  />
-                ))}
+                {(clients ?? [])
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((client) => (
+                    <FilterChip
+                      key={client.id}
+                      label={client.name}
+                      selected={filters.clientId === client.id}
+                      onPress={() => toggleClientFilter(client.id)}
+                    />
+                  ))}
               </ScrollView>
             </View>
-          )}
+
+            <View style={styles.filterSection}>
+              <View style={styles.filterSectionHeader}>
+                <MapPin size={16} color={colors.textSecondary} />
+                <Text style={styles.filterSectionTitle}>Site</Text>
+                {filters.clientId && (
+                  <Text style={styles.filterSectionHint}>
+                    ({sitesForSelectedClient.length} disponibles)
+                  </Text>
+                )}
+              </View>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.chipsScroll}
+              >
+                {sitesForSelectedClient.length === 0 ? (
+                  <Text style={styles.noDataText}>Sélectionnez un client</Text>
+                ) : (
+                  sitesForSelectedClient
+                    .slice()
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((site) => (
+                      <FilterChip
+                        key={site.id}
+                        label={site.name}
+                        selected={filters.siteId === site.id}
+                        onPress={() => toggleSiteFilter(site.id)}
+                      />
+                    ))
+                )}
+              </ScrollView>
+            </View>
+
+            <View style={styles.filterSection}>
+              <Text style={styles.filterSectionTitle}>Statut</Text>
+              <View style={styles.statusChipsContainer}>
+                {(Object.keys(STATUS_CONFIG) as AssetStatus[]).map((status) => {
+                  const config = STATUS_CONFIG[status];
+                  const isSelected = filters.statut === status;
+                  return (
+                    <TouchableOpacity
+                      key={status}
+                      onPress={() => toggleStatusFilter(status)}
+                      activeOpacity={0.7}
+                      style={[
+                        styles.statusChip,
+                        { 
+                          backgroundColor: isSelected ? config.color : config.bgColor,
+                          borderColor: config.color,
+                        },
+                      ]}
+                    >
+                      <View style={[
+                        styles.statusDot,
+                        { backgroundColor: isSelected ? colors.textInverse : config.color }
+                      ]} />
+                      <Text style={[
+                        styles.statusChipText,
+                        { color: isSelected ? colors.textInverse : config.color }
+                      ]}>
+                        {config.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {categories && categories.length > 0 && (
+              <View style={styles.filterSection}>
+                <Text style={styles.filterSectionTitle}>Catégorie</Text>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false} 
+                  contentContainerStyle={styles.chipsScroll}
+                >
+                  {categories.map((cat) => (
+                    <FilterChip
+                      key={cat}
+                      label={cat}
+                      selected={filters.categorie === cat}
+                      onPress={() => toggleCategoryFilter(cat)}
+                    />
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+          </ScrollView>
 
           <TouchableOpacity 
             style={styles.applyButton}
@@ -510,7 +516,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingBottom: spacing.md,
+    maxHeight: 320,
     ...shadows.md,
+  },
+  filtersScrollView: {
+    flexGrow: 0,
   },
   filtersPanelHeader: {
     flexDirection: 'row',

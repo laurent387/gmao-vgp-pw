@@ -232,8 +232,12 @@ export async function initializeDatabase(): Promise<void> {
       mime TEXT NOT NULL,
       sha256 TEXT,
       uploaded_at TEXT NOT NULL,
-      synced INTEGER NOT NULL DEFAULT 0
+      synced INTEGER NOT NULL DEFAULT 0,
+      server_url TEXT
     );
+
+    CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_synced ON documents(synced);
 
     CREATE TABLE IF NOT EXISTS outbox (
       id TEXT PRIMARY KEY,

@@ -1,6 +1,6 @@
 import { getDatabase } from '@/db/database';
 import { Platform } from 'react-native';
-import { mockAssets, mockSites, mockZones, mockMissions, mockNonConformities, mockCorrectiveActions, mockMaintenanceLogs, mockControlTypes, mockReports, mockClients } from '@/db/mockData';
+import { mockAssets, mockSites, mockZones, mockMissions, mockNonConformities, mockCorrectiveActions, mockMaintenanceLogs, mockControlTypes, mockReports, mockClients, mockDocuments } from '@/db/mockData';
 
 const mockDataMap: Record<string, any[]> = {
   assets: mockAssets,
@@ -13,6 +13,7 @@ const mockDataMap: Record<string, any[]> = {
   maintenance_logs: mockMaintenanceLogs,
   control_types: mockControlTypes,
   reports: mockReports,
+  documents: mockDocuments,
 };
 
 export abstract class BaseRepository<T> {

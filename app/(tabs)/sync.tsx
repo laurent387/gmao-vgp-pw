@@ -6,7 +6,6 @@ import { colors, spacing, borderRadius, typography, shadows } from '@/constants/
 import { Button } from '@/components/Button';
 import { StatusBadge } from '@/components/Badge';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
-import { Card } from '@/components/Card';
 import { syncService, SyncResult } from '@/services/SyncService';
 import { OutboxItem } from '@/types';
 
@@ -19,7 +18,7 @@ export default function SyncScreen() {
     queryFn: () => syncService.getOutboxItems(),
   });
 
-  const { data: pendingCount } = useQuery<number>({
+  useQuery<number>({
     queryKey: ['outbox-pending-count'],
     queryFn: () => syncService.getPendingCount(),
   });
@@ -87,7 +86,7 @@ export default function SyncScreen() {
       CREATE_NC: 'Non-conformité',
       UPDATE_ACTION: 'Action corrective',
       CREATE_MAINTENANCE: 'Maintenance',
-      UPLOAD_DOCUMENT: 'Document',
+      UPLOAD_DOCUMENT: 'Photo / Document',
     };
     return labels[type] || type;
   };

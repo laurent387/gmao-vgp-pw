@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Platform } from 'react-native';
+import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight } from 'lucide-react-native';
+import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight, Camera, Image as ImageIcon, Trash2, Upload } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { Image } from 'expo-image';
+
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { StatusBadge, CriticalityBadge } from '@/components/Badge';
 import { SectionCard } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { ncRepository, actionRepository } from '@/repositories/NCRepository';
+import { documentRepository } from '@/repositories/DocumentRepository';
 import { syncService } from '@/services/SyncService';
 import { useAuth } from '@/contexts/AuthContext';
-import { NonConformity, ActionStatus } from '@/types';
+import { Document, NonConformity, ActionStatus } from '@/types';
 
 export default function NCDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const router = useRouter();
   const queryClient = useQueryClient();
   const { user, canValidate, canEdit } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
@@ -23,6 +27,15 @@ export default function NCDetailScreen() {
   const { data: nc, isLoading, refetch } = useQuery<NonConformity | null>({
     queryKey: ['nc', id],
     queryFn: () => ncRepository.getByIdWithAction(id!),
+    enabled: !!id,
+  });
+
+  const { data: documents } = useQuery<Document[]>({
+    queryKey: ['nc-documents', id],
+    queryFn: async () => {
+      if (!id) return [];
+      return documentRepository.getByEntity('nc', id);
+    },
     enabled: !!id,
   });
 
@@ -63,19 +76,6 @@ export default function NCDetailScreen() {
     setRefreshing(false);
   };
 
-  if (isLoading) {
-    return <LoadingState message="Chargement..." />;
-  }
-
-  if (!nc) {
-    return (
-      <EmptyState
-        title="NC non trouvée"
-        message="Cette non-conformité n'existe pas"
-      />
-    );
-  }
-
   const formatDate = (date: string | null) => {
     if (!date) return '-';
     return new Date(date).toLocaleDateString('fr-FR', {
@@ -85,7 +85,23 @@ export default function NCDetailScreen() {
     });
   };
 
-  const action = nc.corrective_action;
+  const action = nc?.corrective_action;
+
+  const photoDocs = useMemo(() => {
+    return (documents ?? []).filter((d) => d.mime.startsWith('image/'));
+  }, [documents]);
+
+  const resolveImageUri = useCallback(
+    (doc: Document): string => {
+      if (doc.server_url) {
+        const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
+        if (doc.server_url.startsWith('http')) return doc.server_url;
+        if (base) return `${base}${doc.server_url}`;
+      }
+      return doc.local_uri;
+    },
+    []
+  );
   const canProgress = canEdit() && action;
   const canClose = canProgress && action?.status === 'EN_COURS';
   const canValidateAction = canValidate() && action?.status === 'CLOTUREE';
@@ -130,34 +146,184 @@ export default function NCDetailScreen() {
     }
   };
 
+  const addPhotoMutation = useMutation<{ documentId: string }, Error, void>({
+    mutationFn: async () => {
+      if (!id) throw new Error('NC inconnue');
+
+      if (Platform.OS !== 'web') {
+        const perm = await ImagePicker.requestCameraPermissionsAsync();
+        if (perm.status !== 'granted') {
+          throw new Error('Permission caméra refusée');
+        }
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+        exif: false,
+        allowsEditing: false,
+      });
+
+      if (result.canceled || !result.assets[0]?.uri) {
+        throw new Error('Capture annulée');
+      }
+
+      const srcUri = result.assets[0].uri;
+
+      if (Platform.OS === 'web') {
+        const docId = `web-doc-${Date.now()}`;
+        await syncService.addToOutbox('UPLOAD_DOCUMENT', { documentId: docId });
+        return { documentId: docId };
+      }
+
+      const photosDir = `${FileSystem.Paths.document.uri}photos`;
+      const dirInfo = await FileSystem.getInfoAsync(photosDir);
+      if (!dirInfo.exists) {
+        await FileSystem.makeDirectoryAsync(photosDir, { intermediates: true });
+      }
+
+      const destUri = `${photosDir}/nc-${id}-${Date.now()}.jpg`;
+      await FileSystem.copyAsync({ from: srcUri, to: destUri });
+
+      const documentId = await documentRepository.create({
+        entity_type: 'nc',
+        entity_id: id,
+        local_uri: destUri,
+        mime: 'image/jpeg',
+        sha256: null,
+        uploaded_at: new Date().toISOString(),
+        synced: false,
+        server_url: null,
+      });
+
+      await syncService.addToOutbox('UPLOAD_DOCUMENT', { documentId });
+
+      return { documentId };
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['nc-documents', id] });
+      await queryClient.invalidateQueries({ queryKey: ['outbox-pending-count'] });
+      await queryClient.invalidateQueries({ queryKey: ['outbox'] });
+    },
+    onError: (e) => {
+      if (e.message !== 'Capture annulée') {
+        Alert.alert('Erreur', e.message);
+      }
+    },
+  });
+
+  const deletePhotoMutation = useMutation<void, Error, { documentId: string; localUri: string }>({
+    mutationFn: async ({ documentId, localUri }) => {
+      if (Platform.OS !== 'web') {
+        try {
+          await FileSystem.deleteAsync(localUri, { idempotent: true });
+        } catch (e) {
+          console.log('[NC] Failed to delete local file:', e);
+        }
+      }
+      await documentRepository.deleteById(documentId);
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['nc-documents', id] });
+    },
+    onError: (e) => Alert.alert('Erreur', e.message),
+  });
+
   return (
     <>
       <Stack.Screen options={{ title: 'Non-conformité' }} />
-      
-      <ScrollView 
+
+      {isLoading ? (
+        <LoadingState message="Chargement..." />
+      ) : !nc ? (
+        <EmptyState title="NC non trouvée" message="Cette non-conformité n'existe pas" />
+      ) : (
+
+      <ScrollView
         style={styles.container}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
           <View style={styles.headerTop}>
             <AlertTriangle size={24} color={colors.danger} />
-            <CriticalityBadge level={nc.severity} />
-            <StatusBadge status={nc.status} />
+            <CriticalityBadge level={nc?.severity ?? 3} />
+            <StatusBadge status={nc?.status ?? 'OUVERTE'} />
           </View>
-          <Text style={styles.title}>{nc.title}</Text>
+          <Text style={styles.title}>{nc?.title ?? ''}</Text>
           {(nc as any).asset_code && (
             <Text style={styles.assetInfo}>
               Équipement: {(nc as any).asset_code} - {(nc as any).asset_designation}
             </Text>
           )}
-          <Text style={styles.date}>Créée le {formatDate(nc.created_at)}</Text>
+          <Text style={styles.date}>Créée le {formatDate(nc?.created_at ?? null)}</Text>
         </View>
 
         <View style={styles.content}>
           <SectionCard title="Description">
             <Text style={styles.description}>
-              {nc.description || 'Aucune description'}
+              {nc?.description || 'Aucune description'}
             </Text>
+          </SectionCard>
+
+          <SectionCard
+            title="Photos"
+            action={
+              <TouchableOpacity
+                testID="nc-add-photo"
+                style={styles.photoAddBtn}
+                onPress={() => addPhotoMutation.mutate()}
+                disabled={addPhotoMutation.isPending}
+              >
+                <Camera size={18} color={colors.textInverse} />
+                <Text style={styles.photoAddBtnText}>{addPhotoMutation.isPending ? '...' : 'Ajouter'}</Text>
+              </TouchableOpacity>
+            }
+          >
+            {photoDocs.length === 0 ? (
+              <View style={styles.photoEmpty}>
+                <ImageIcon size={18} color={colors.textMuted} />
+                <Text style={styles.photoEmptyText}>Aucune photo</Text>
+                <Text style={styles.photoEmptyHint}>
+                  Ajoutez une photo pour documenter la non-conformité.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+                {photoDocs.map((doc) => {
+                  const uri = resolveImageUri(doc);
+                  return (
+                    <View key={doc.id} style={styles.photoCard}>
+                      <Image source={{ uri }} style={styles.photo} contentFit="cover" />
+                      <View style={styles.photoMeta}>
+                        <View style={styles.photoMetaLeft}>
+                          <Text style={styles.photoMetaText} numberOfLines={1}>
+                            {doc.synced ? 'Synchronisée' : 'En attente'}
+                          </Text>
+                        </View>
+                        <View style={styles.photoMetaRight}>
+                          {!doc.synced && (
+                            <View style={styles.photoMetaBadge}>
+                              <Upload size={14} color={colors.warning} />
+                            </View>
+                          )}
+                          <TouchableOpacity
+                            testID={`nc-delete-photo-${doc.id}`}
+                            onPress={() =>
+                              deletePhotoMutation.mutate({
+                                documentId: doc.id,
+                                localUri: doc.local_uri,
+                              })
+                            }
+                            style={styles.photoDeleteBtn}
+                          >
+                            <Trash2 size={16} color={colors.danger} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
           </SectionCard>
 
           {action && (
@@ -226,6 +392,7 @@ export default function NCDetailScreen() {
           )}
         </View>
       </ScrollView>
+      )}
     </>
   );
 }
@@ -264,6 +431,91 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
+  },
+  photoAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.full,
+  },
+  photoAddBtnText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: colors.textInverse,
+  },
+  photoEmpty: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: spacing.sm,
+  },
+  photoEmptyText: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+  },
+  photoEmptyHint: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    textAlign: 'center' as const,
+    maxWidth: 280,
+  },
+  photoRow: {
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingRight: spacing.lg,
+  },
+  photoCard: {
+    width: 220,
+    borderRadius: borderRadius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  photo: {
+    width: '100%',
+    height: 140,
+    backgroundColor: colors.surfaceAlt,
+  },
+  photoMeta: {
+    padding: spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  photoMetaLeft: {
+    flex: 1,
+  },
+  photoMetaText: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textSecondary,
+  },
+  photoMetaRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  photoMetaBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.warningLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  photoDeleteBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   description: {
     fontSize: typography.body.fontSize,

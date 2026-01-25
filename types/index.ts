@@ -193,13 +193,14 @@ export interface MaintenanceLog {
 
 export interface Document {
   id: string;
-  entity_type: 'asset' | 'report' | 'action' | 'maintenance';
+  entity_type: 'asset' | 'report' | 'action' | 'maintenance' | 'nc';
   entity_id: string;
   local_uri: string;
   mime: string;
   sha256: string | null;
   uploaded_at: string;
   synced: boolean;
+  server_url?: string | null;
 }
 
 export interface OutboxItem {

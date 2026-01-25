@@ -7,19 +7,10 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // Production API URL
-  const productionUrl = "https://api.in-spectra.com";
-  
-  const envUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  
-  // Use production URL, ignore dev URLs
-  if (envUrl && !envUrl.includes('rorktest.dev') && !envUrl.includes('localhost')) {
-    console.log("[TRPC] Using env API base URL:", envUrl);
-    return envUrl;
-  }
-
-  console.log("[TRPC] Using production API base URL:", productionUrl);
-  return productionUrl;
+  // Always use production API URL
+  const baseUrl = "https://api.in-spectra.com";
+  console.log("[TRPC] Base URL:", baseUrl);
+  return baseUrl;
 };
 
 const baseUrl = getBaseUrl();

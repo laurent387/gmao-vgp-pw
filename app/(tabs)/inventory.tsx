@@ -271,11 +271,7 @@ export default function InventoryScreen() {
             )}
           </View>
 
-          <ScrollView 
-            style={styles.filtersScrollView}
-            showsVerticalScrollIndicator={true}
-            nestedScrollEnabled={true}
-          >
+          <View style={styles.filtersContent}>
             <View style={styles.filterSection}>
               <View style={styles.filterSectionHeader}>
                 <Building2 size={16} color={colors.textSecondary} />
@@ -387,7 +383,7 @@ export default function InventoryScreen() {
                 </ScrollView>
               </View>
             )}
-          </ScrollView>
+          </View>
 
           <TouchableOpacity 
             style={styles.applyButton}
@@ -516,11 +512,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     paddingBottom: spacing.md,
-    maxHeight: 320,
     ...shadows.md,
   },
-  filtersScrollView: {
-    flexGrow: 0,
+  filtersContent: {
   },
   filtersPanelHeader: {
     flexDirection: 'row',

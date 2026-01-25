@@ -7,9 +7,9 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  // Always use production API URL
+  // Production API - hardcoded to avoid env issues
   const baseUrl = "https://api.in-spectra.com";
-  console.log("[TRPC] Base URL:", baseUrl);
+  console.log("[TRPC] Using API:", baseUrl);
   return baseUrl;
 };
 
@@ -34,7 +34,7 @@ export const trpcClient = trpc.createClient({
         } catch (error) {
           console.error("[TRPC] Network error:", error);
           console.error("[TRPC] Attempted URL:", url);
-          console.error("[TRPC] Base URL configured:", baseUrl);
+          console.error("[TRPC] API URL:", baseUrl);
           throw error;
         }
       },

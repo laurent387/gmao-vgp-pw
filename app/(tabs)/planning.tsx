@@ -1,8 +1,8 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, SectionList, RefreshControl, TouchableOpacity } from 'react-native';
+import React, { useState, useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, SectionList, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Calendar, AlertTriangle, Clock, CheckCircle } from 'lucide-react-native';
+import { Calendar, AlertTriangle, Clock, CheckCircle, CalendarDays } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
 import { EcheanceListItem } from '@/components/ListItem';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
@@ -70,6 +70,56 @@ export default function PlanningScreen() {
     return result;
   }, [echeances]);
 
+  const chronologicalEvents = useMemo(() => {
+    if (!echeances) return [];
+    return [...echeances].sort((a, b) => {
+      const dateA = new Date(a.next_due_date).getTime();
+      const dateB = new Date(b.next_due_date).getTime();
+      return dateA - dateB;
+    });
+  }, [echeances]);
+
+  const groupedByDate = useMemo(() => {
+    const groups: { [key: string]: DueEcheance[] } = {};
+    chronologicalEvents.forEach(event => {
+      const date = new Date(event.next_due_date);
+      const key = date.toISOString().split('T')[0];
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+      groups[key].push(event);
+    });
+    return groups;
+  }, [chronologicalEvents]);
+
+  const formatDateHeader = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    if (date.toDateString() === today.toDateString()) {
+      return "Aujourd'hui";
+    }
+    if (date.toDateString() === tomorrow.toDateString()) {
+      return 'Demain';
+    }
+    
+    return date.toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined,
+    });
+  };
+
+  const getEventColor = (event: DueEcheance) => {
+    if (event.is_overdue) return colors.danger;
+    if (event.days_remaining <= 7) return colors.warning;
+    if (event.days_remaining <= 30) return colors.info;
+    return colors.textMuted;
+  };
+
   const handleEcheancePress = (echeance: DueEcheance) => {
     router.push(`/asset/${echeance.asset_id}`);
   };
@@ -125,40 +175,108 @@ export default function PlanningScreen() {
         </View>
       </View>
 
-      <SectionList
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        renderItem={({ item }) => (
-          <EcheanceListItem
-            assetCode={item.asset_code}
-            assetDesignation={item.asset_designation}
-            controlTypeLabel={item.control_type_label}
-            daysRemaining={item.days_remaining}
-            isOverdue={item.is_overdue}
-            siteName={item.site_name}
-            onPress={() => handleEcheancePress(item)}
-          />
-        )}
-        renderSectionHeader={({ section }) => (
-          <View style={styles.sectionHeader}>
-            <View style={[styles.sectionIndicator, { backgroundColor: section.color }]} />
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            <Text style={styles.sectionCount}>{section.data.length}</Text>
-          </View>
-        )}
-        contentContainerStyle={styles.listContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-        }
-        ListEmptyComponent={
-          <EmptyState
-            icon={<CheckCircle size={48} color={colors.success} />}
-            title="Aucune échéance"
-            message="Tous les contrôles sont à jour"
-          />
-        }
-        stickySectionHeadersEnabled={false}
-      />
+      {filter === 'all' ? (
+        <FlatList
+          data={Object.keys(groupedByDate).sort()}
+          keyExtractor={(item) => item}
+          renderItem={({ item: dateKey }) => (
+            <View style={styles.calendarDay}>
+              <View style={styles.calendarDateHeader}>
+                <View style={styles.calendarDateBadge}>
+                  <Text style={styles.calendarDateDay}>
+                    {new Date(dateKey).getDate()}
+                  </Text>
+                  <Text style={styles.calendarDateMonth}>
+                    {new Date(dateKey).toLocaleDateString('fr-FR', { month: 'short' }).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.calendarDateInfo}>
+                  <Text style={styles.calendarDateTitle}>{formatDateHeader(dateKey)}</Text>
+                  <Text style={styles.calendarDateCount}>
+                    {groupedByDate[dateKey].length} échéance{groupedByDate[dateKey].length > 1 ? 's' : ''}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.calendarEvents}>
+                {groupedByDate[dateKey].map((event) => (
+                  <TouchableOpacity
+                    key={event.id}
+                    style={styles.calendarEvent}
+                    onPress={() => handleEcheancePress(event)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={[styles.calendarEventIndicator, { backgroundColor: getEventColor(event) }]} />
+                    <View style={styles.calendarEventContent}>
+                      <Text style={styles.calendarEventTitle} numberOfLines={1}>
+                        {event.asset_code} - {event.asset_designation}
+                      </Text>
+                      <Text style={styles.calendarEventSubtitle} numberOfLines={1}>
+                        {event.control_type_label}
+                      </Text>
+                      <View style={styles.calendarEventMeta}>
+                        <Text style={styles.calendarEventSite}>{event.site_name}</Text>
+                        {event.is_overdue && (
+                          <View style={styles.overdueTag}>
+                            <AlertTriangle size={10} color={colors.danger} />
+                            <Text style={styles.overdueTagText}>En retard</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                    <CalendarDays size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+          contentContainerStyle={styles.calendarContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon={<CheckCircle size={48} color={colors.success} />}
+              title="Aucune échéance"
+              message="Tous les contrôles sont à jour"
+            />
+          }
+        />
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <EcheanceListItem
+              assetCode={item.asset_code}
+              assetDesignation={item.asset_designation}
+              controlTypeLabel={item.control_type_label}
+              daysRemaining={item.days_remaining}
+              isOverdue={item.is_overdue}
+              siteName={item.site_name}
+              onPress={() => handleEcheancePress(item)}
+            />
+          )}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <View style={[styles.sectionIndicator, { backgroundColor: section.color }]} />
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionCount}>{section.data.length}</Text>
+            </View>
+          )}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          }
+          ListEmptyComponent={
+            <EmptyState
+              icon={<CheckCircle size={48} color={colors.success} />}
+              title="Aucune échéance"
+              message="Tous les contrôles sont à jour"
+            />
+          }
+          stickySectionHeadersEnabled={false}
+        />
+      )}
     </View>
   );
 }
@@ -249,5 +367,115 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: borderRadius.sm,
+  },
+  calendarContent: {
+    padding: spacing.md,
+    flexGrow: 1,
+  },
+  calendarDay: {
+    marginBottom: spacing.lg,
+  },
+  calendarDateHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  calendarDateBadge: {
+    width: 52,
+    height: 52,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  calendarDateDay: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: colors.textInverse,
+    lineHeight: 24,
+  },
+  calendarDateMonth: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: colors.textInverse,
+    opacity: 0.9,
+  },
+  calendarDateInfo: {
+    flex: 1,
+  },
+  calendarDateTitle: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+    textTransform: 'capitalize',
+  },
+  calendarDateCount: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  calendarEvents: {
+    marginLeft: 26,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
+    paddingLeft: spacing.lg,
+  },
+  calendarEvent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  calendarEventIndicator: {
+    width: 4,
+    height: '100%',
+    minHeight: 40,
+    borderRadius: 2,
+    marginRight: spacing.md,
+  },
+  calendarEventContent: {
+    flex: 1,
+  },
+  calendarEventTitle: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  calendarEventSubtitle: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.textSecondary,
+    marginBottom: 4,
+  },
+  calendarEventMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  calendarEventSite: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+  },
+  overdueTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.dangerLight,
+    paddingHorizontal: spacing.xs,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  overdueTagText: {
+    fontSize: 10,
+    fontWeight: '600' as const,
+    color: colors.danger,
   },
 });

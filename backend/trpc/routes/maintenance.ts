@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
+import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
 
 interface DbMaintenanceLog {
@@ -81,7 +81,7 @@ export const maintenanceRouter = createTRPCRouter({
       return logs[0] || null;
     }),
 
-  create: protectedProcedure
+  create: mutationProcedure
     .input(
       z.object({
         asset_id: z.string(),
@@ -164,7 +164,7 @@ export const maintenanceRouter = createTRPCRouter({
       }));
     }),
 
-  updateStatus: protectedProcedure
+  updateStatus: mutationProcedure
     .input(
       z.object({
         id: z.string(),

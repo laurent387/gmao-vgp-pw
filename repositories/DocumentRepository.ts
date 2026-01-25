@@ -68,6 +68,16 @@ export class DocumentRepository extends BaseRepository<Document> {
     const db = await getDatabase();
     return db.getAllAsync<Document>('SELECT * FROM documents WHERE synced = 0 ORDER BY uploaded_at ASC');
   }
+
+  async delete(id: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      console.log('[DocumentRepository] delete(web)', id);
+      return;
+    }
+
+    const db = await getDatabase();
+    await db.runAsync('DELETE FROM documents WHERE id = ?', [id]);
+  }
 }
 
 export const documentRepository = new DocumentRepository();

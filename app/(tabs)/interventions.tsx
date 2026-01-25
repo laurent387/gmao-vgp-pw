@@ -94,9 +94,10 @@ export default function InterventionsScreen() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const planned = interventions.filter(i => i.status === 'PLANIFIEE');
-    const inProgress = interventions.filter(i => i.status === 'EN_COURS');
-    const completed = interventions.filter(i => i.status === 'TERMINEE');
+    const typedInterventions = interventions as Intervention[];
+    const planned = typedInterventions.filter(i => i.status === 'PLANIFIEE');
+    const inProgress = typedInterventions.filter(i => i.status === 'EN_COURS');
+    const completed = typedInterventions.filter(i => i.status === 'TERMINEE');
 
     const result: Section[] = [];
     

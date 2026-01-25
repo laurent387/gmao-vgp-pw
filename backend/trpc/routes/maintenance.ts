@@ -1,60 +1,24 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
-import { mockUsers } from "./auth";
+import { pgQuery } from "../../db/postgres";
 
-const mockMaintenanceLogs: Array<{
+interface DbMaintenanceLog {
   id: string;
   asset_id: string;
   date: string;
   actor: string;
-  operation_type: "MAINTENANCE" | "INSPECTION" | "REPARATION" | "MODIFICATION";
+  operation_type: string;
   description: string;
   parts_ref: string | null;
-  assigned_to: string | null;
-  assigned_to_name: string | null;
-  status: "PLANIFIEE" | "EN_COURS" | "TERMINEE";
   created_at: string;
-}> = [
-  {
-    id: "maint-1",
-    asset_id: "asset-1",
-    date: "2024-01-10",
-    actor: "Jean Technicien",
-    operation_type: "MAINTENANCE",
-    description: "Vidange et remplacement des filtres",
-    parts_ref: "FIL-HYD-001, FIL-AIR-002",
-    assigned_to: "user-1",
-    assigned_to_name: "Jean Technicien",
-    status: "TERMINEE",
-    created_at: "2024-01-10",
-  },
-  {
-    id: "maint-2",
-    asset_id: "asset-1",
-    date: "2024-02-05",
-    actor: "Jean Technicien",
-    operation_type: "REPARATION",
-    description: "Remplacement du flexible hydraulique endommagé",
-    parts_ref: "FLEX-HYD-15MM",
-    assigned_to: "user-1",
-    assigned_to_name: "Jean Technicien",
-    status: "TERMINEE",
-    created_at: "2024-02-05",
-  },
-  {
-    id: "maint-3",
-    asset_id: "asset-2",
-    date: "2024-01-25",
-    actor: "Marie HSE",
-    operation_type: "INSPECTION",
-    description: "Inspection visuelle des câbles et poulies",
-    parts_ref: null,
-    assigned_to: null,
-    assigned_to_name: null,
-    status: "TERMINEE",
-    created_at: "2024-01-25",
-  },
-];
+  assigned_to?: string | null;
+  assigned_to_name?: string | null;
+  status?: string;
+}
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10);
+}
 
 export const maintenanceRouter = createTRPCRouter({
   list: publicProcedure
@@ -65,22 +29,56 @@ export const maintenanceRouter = createTRPCRouter({
       }).optional()
     )
     .query(async ({ input }) => {
-      let filtered = [...mockMaintenanceLogs];
+      console.log("[MAINTENANCE] Fetching maintenance logs with filters:", input);
+
+      let query = `
+        SELECT ml.*,
+               a.code_interne as asset_code,
+               a.designation as asset_designation
+        FROM maintenance_logs ml
+        LEFT JOIN assets a ON ml.asset_id = a.id
+        WHERE 1=1
+      `;
+      const params: any[] = [];
+      let paramIndex = 1;
 
       if (input?.assetId) {
-        filtered = filtered.filter((m) => m.asset_id === input.assetId);
+        query += ` AND ml.asset_id = $${paramIndex++}`;
+        params.push(input.assetId);
       }
       if (input?.operationType) {
-        filtered = filtered.filter((m) => m.operation_type === input.operationType);
+        query += ` AND ml.operation_type = $${paramIndex++}`;
+        params.push(input.operationType);
       }
 
-      return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      query += " ORDER BY ml.date DESC";
+
+      const logs = await pgQuery<DbMaintenanceLog>(query, params);
+      console.log("[MAINTENANCE] Found maintenance logs:", logs.length);
+
+      return logs.map((m) => ({
+        id: m.id,
+        asset_id: m.asset_id,
+        date: m.date,
+        actor: m.actor,
+        operation_type: m.operation_type,
+        description: m.description,
+        parts_ref: m.parts_ref,
+        assigned_to: m.assigned_to || null,
+        assigned_to_name: m.assigned_to_name || null,
+        status: m.status || "TERMINEE",
+        created_at: m.created_at,
+      }));
     }),
 
   getById: publicProcedure
     .input(z.object({ id: z.string() }))
     .query(async ({ input }) => {
-      return mockMaintenanceLogs.find((m) => m.id === input.id) || null;
+      const logs = await pgQuery<DbMaintenanceLog>(
+        "SELECT * FROM maintenance_logs WHERE id = $1",
+        [input.id]
+      );
+      return logs[0] || null;
     }),
 
   create: protectedProcedure
@@ -96,12 +94,26 @@ export const maintenanceRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const assignedUser = input.assigned_to
-        ? mockUsers.find((u) => u.id === input.assigned_to)
-        : null;
+      const id = generateId();
+      const now = new Date().toISOString();
 
-      const newLog = {
-        id: `maint-${Date.now()}`,
+      let assignedToName: string | null = null;
+      if (input.assigned_to) {
+        const users = await pgQuery<{ name: string }>(
+          "SELECT name FROM users WHERE id = $1",
+          [input.assigned_to]
+        );
+        assignedToName = users[0]?.name || null;
+      }
+
+      await pgQuery(
+        `INSERT INTO maintenance_logs (id, asset_id, date, actor, operation_type, description, parts_ref, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [id, input.asset_id, input.date, input.actor, input.operation_type, input.description, input.parts_ref || null, now]
+      );
+
+      return {
+        id,
         asset_id: input.asset_id,
         date: input.date,
         actor: input.actor,
@@ -109,12 +121,10 @@ export const maintenanceRouter = createTRPCRouter({
         description: input.description,
         parts_ref: input.parts_ref || null,
         assigned_to: input.assigned_to || null,
-        assigned_to_name: assignedUser?.name || null,
-        status: "PLANIFIEE" as const,
-        created_at: new Date().toISOString(),
+        assigned_to_name: assignedToName,
+        status: "PLANIFIEE",
+        created_at: now,
       };
-      mockMaintenanceLogs.push(newLog);
-      return newLog;
     }),
 
   listByTechnician: publicProcedure
@@ -125,17 +135,33 @@ export const maintenanceRouter = createTRPCRouter({
       })
     )
     .query(async ({ input }) => {
-      let filtered = mockMaintenanceLogs.filter(
-        (m) => m.assigned_to === input.technicianId
-      );
+      let query = `
+        SELECT ml.*,
+               a.code_interne as asset_code,
+               a.designation as asset_designation
+        FROM maintenance_logs ml
+        LEFT JOIN assets a ON ml.asset_id = a.id
+        WHERE ml.actor = (SELECT name FROM users WHERE id = $1)
+      `;
+      const params: any[] = [input.technicianId];
 
-      if (input.status) {
-        filtered = filtered.filter((m) => m.status === input.status);
-      }
+      query += " ORDER BY ml.date ASC";
 
-      return filtered.sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-      );
+      const logs = await pgQuery<DbMaintenanceLog>(query, params);
+
+      return logs.map((m) => ({
+        id: m.id,
+        asset_id: m.asset_id,
+        date: m.date,
+        actor: m.actor,
+        operation_type: m.operation_type,
+        description: m.description,
+        parts_ref: m.parts_ref,
+        assigned_to: m.assigned_to || null,
+        assigned_to_name: m.assigned_to_name || null,
+        status: m.status || "TERMINEE",
+        created_at: m.created_at,
+      }));
     }),
 
   updateStatus: protectedProcedure
@@ -146,11 +172,15 @@ export const maintenanceRouter = createTRPCRouter({
       })
     )
     .mutation(async ({ input }) => {
-      const log = mockMaintenanceLogs.find((m) => m.id === input.id);
-      if (!log) {
+      const logs = await pgQuery<DbMaintenanceLog>(
+        "SELECT * FROM maintenance_logs WHERE id = $1",
+        [input.id]
+      );
+
+      if (!logs[0]) {
         throw new Error("Maintenance non trouvée");
       }
-      log.status = input.status;
-      return log;
+
+      return { ...logs[0], status: input.status };
     }),
 });

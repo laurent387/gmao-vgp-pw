@@ -2,7 +2,6 @@ import { getDatabase } from '@/db/database';
 import { MaintenanceLog } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { mockMaintenanceLogs } from '@/db/mockData';
 
 export class MaintenanceRepository extends BaseRepository<MaintenanceLog> {
   constructor() {
@@ -10,8 +9,8 @@ export class MaintenanceRepository extends BaseRepository<MaintenanceLog> {
   }
 
   async getByAssetId(assetId: string): Promise<MaintenanceLog[]> {
-    if (Platform.OS === 'web') return mockMaintenanceLogs.filter(l => l.asset_id === assetId);
-    
+    if (Platform.OS === 'web') return [];
+
     const db = await getDatabase();
     return db.getAllAsync<MaintenanceLog>(
       'SELECT * FROM maintenance_logs WHERE asset_id = ? ORDER BY date DESC',

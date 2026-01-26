@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import createContextHook from '@nkzw/create-context-hook';
 import { initializeDatabase, clearDatabase } from '@/db/database';
-import { seedDatabase } from '@/db/seed';
 import { Platform } from 'react-native';
 
 interface DatabaseState {
@@ -26,13 +25,12 @@ export const [DatabaseProvider, useDatabase] = createContextHook(() => {
       console.log('[DATABASE] Initializing...');
       
       if (Platform.OS === 'web') {
-        console.log('[DATABASE] Web platform - using mock mode');
+        console.log('[DATABASE] Web platform - skipping local database');
         setState({ isReady: true, isLoading: false, error: null });
         return;
       }
-      
+
       await initializeDatabase();
-      await seedDatabase();
       
       console.log('[DATABASE] Ready');
       setState({ isReady: true, isLoading: false, error: null });
@@ -47,7 +45,6 @@ export const [DatabaseProvider, useDatabase] = createContextHook(() => {
     setState(s => ({ ...s, isLoading: true }));
     try {
       await clearDatabase();
-      await seedDatabase();
       setState({ isReady: true, isLoading: false, error: null });
       console.log('[DATABASE] Reset complete');
     } catch (e) {

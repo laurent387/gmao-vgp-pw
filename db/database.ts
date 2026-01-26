@@ -7,45 +7,17 @@ export async function getDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
   
   if (Platform.OS === 'web') {
-    console.log('[DB] Web platform - using mock database');
-    return createMockDatabase();
+    throw new Error('Local database is not available on web');
   }
-  
+
   db = await SQLite.openDatabaseAsync('inspectra.db');
   console.log('[DB] Database opened successfully');
   return db;
 }
 
-function createMockDatabase(): SQLite.SQLiteDatabase {
-  const mockDb = {
-    execAsync: async (sql: string) => {
-      console.log('[MockDB] execAsync:', sql.substring(0, 100));
-    },
-    runAsync: async (sql: string, params?: any[]) => {
-      console.log('[MockDB] runAsync:', sql.substring(0, 100), params);
-      return { lastInsertRowId: 1, changes: 1 };
-    },
-    getFirstAsync: async <T>(sql: string, params?: any[]): Promise<T | null> => {
-      console.log('[MockDB] getFirstAsync:', sql.substring(0, 100), params);
-      return null;
-    },
-    getAllAsync: async <T>(sql: string, params?: any[]): Promise<T[]> => {
-      console.log('[MockDB] getAllAsync:', sql.substring(0, 100), params);
-      return [];
-    },
-  } as unknown as SQLite.SQLiteDatabase;
-  
-  db = mockDb;
-  return mockDb;
-}
-
 export async function initializeDatabase(): Promise<void> {
   const database = await getDatabase();
   
-  if (Platform.OS === 'web') {
-    console.log('[DB] Skipping schema creation on web');
-    return;
-  }
   
   console.log('[DB] Creating tables...');
   

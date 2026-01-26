@@ -242,7 +242,7 @@ export default function AddMaintenanceScreen() {
             )}
           />
 
-          <Text style={styles.label}>Type d'opération</Text>
+          <Text style={styles.label}>{"Type d'opération"}</Text>
           <Controller
             control={control}
             name="operationType"

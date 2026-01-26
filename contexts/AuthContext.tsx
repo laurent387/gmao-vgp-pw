@@ -3,52 +3,8 @@ import createContextHook from '@nkzw/create-context-hook';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
-import { userRepository } from '@/repositories/UserRepository';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { trpcClient } from '@/lib/trpc';
-
-const MOCK_USERS: User[] = [
-  {
-    id: 'mock-user-1',
-    email: 'technicien@inspectra.fr',
-    name: 'Jean Dupont',
-    role: 'TECHNICIAN',
-    token_mock: 'mock_token_tech',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mock-user-2',
-    email: 'hse@inspectra.fr',
-    name: 'Marie Martin',
-    role: 'HSE_MANAGER',
-    token_mock: 'mock_token_hse',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mock-user-3',
-    email: 'admin@inspectra.fr',
-    name: 'Admin Système',
-    role: 'ADMIN',
-    token_mock: 'mock_token_admin',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mock-user-4',
-    email: 'auditeur@inspectra.fr',
-    name: 'Pierre Auditeur',
-    role: 'AUDITOR',
-    token_mock: 'mock_token_auditor',
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'mock-user-5',
-    email: 'manager@inspectra.fr',
-    name: 'Sophie Responsable',
-    role: 'HSE_MANAGER',
-    token_mock: 'mock_token_manager',
-    created_at: new Date().toISOString(),
-  },
-];
 
 const STORAGE_KEY = 'inspectra_auth';
 
@@ -59,7 +15,7 @@ interface AuthState {
 }
 
 interface StoredAuth {
-  userId: string;
+  user: User;
   token?: string;
 }
 
@@ -117,20 +73,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[AUTH] Loading stored auth...');
     const stored = await getStoredAuth();
     
-    if (stored?.userId) {
-      let user: User | null = null;
-      
-      if (Platform.OS === 'web') {
-        user = MOCK_USERS.find(u => u.id === stored.userId) || null;
-      } else {
-        user = await userRepository.getById(stored.userId);
-      }
-      
-      if (user) {
-        console.log('[AUTH] Restored session for:', user.email);
-        setState({ user, isLoading: false, isAuthenticated: true });
-        return;
-      }
+    if (stored?.user?.id) {
+      console.log('[AUTH] Restored session for:', stored.user.email);
+      setState({ user: stored.user, isLoading: false, isAuthenticated: true });
+      return;
     }
     
     setState({ user: null, isLoading: false, isAuthenticated: false });
@@ -140,41 +86,23 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[AUTH] Attempting login for:', email);
     const normalizedEmail = email.toLowerCase().trim();
     
-    // Helper function for local fallback auth
-    const tryLocalAuth = async (): Promise<User | null> => {
-      console.log('[AUTH] Trying local fallback...');
-      if (Platform.OS === 'web') {
-        return MOCK_USERS.find(u => u.email.toLowerCase() === normalizedEmail) || null;
-      } else {
-        return await userRepository.getByEmail(normalizedEmail);
-      }
-    };
-    
-    // Try backend first with timeout
     try {
       console.log('[AUTH] Calling backend API...');
-      
-      const timeoutPromise = new Promise<never>((_, reject) => 
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Timeout')), 5000)
       );
-      
+
       const result = await Promise.race([
         trpcClient.auth.login.mutate({
           email: normalizedEmail,
           password: password || 'demo123',
         }),
-        timeoutPromise
+        timeoutPromise,
       ]);
-      
+
       if (!result?.user) {
-        console.log('[AUTH] Backend returned no user, trying fallback...');
-        const user = await tryLocalAuth();
-        if (user) {
-          await setStoredAuth({ userId: user.id });
-          setState({ user, isLoading: false, isAuthenticated: true });
-          console.log('[AUTH] Fallback login successful for:', user.email);
-          return true;
-        }
+        console.log('[AUTH] Backend returned no user');
         return false;
       }
       
@@ -187,60 +115,16 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         created_at: new Date().toISOString(),
       };
       
-      await setStoredAuth({ userId: user.id, token: result.token });
+      await setStoredAuth({ user, token: result.token });
       setState({ user, isLoading: false, isAuthenticated: true });
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
       return true;
     } catch (error: any) {
-      console.log('[AUTH] Backend unavailable:', error?.message || 'Unknown error');
-      
-      // Fallback to local auth if backend fails
-      const user = await tryLocalAuth();
-      
-      if (user) {
-        await setStoredAuth({ userId: user.id });
-        setState({ user, isLoading: false, isAuthenticated: true });
-        console.log('[AUTH] Fallback login successful for:', user.email);
-        return true;
-      }
-      
-      console.log('[AUTH] No matching user found in fallback');
+      console.log('[AUTH] Backend login failed:', error?.message || 'Unknown error');
       return false;
     }
   }, []);
 
-  const loginAsRole = useCallback(async (role: UserRole): Promise<boolean> => {
-    console.log('[AUTH] Quick login as role:', role);
-    
-    let users: User[] = [];
-    
-    if (Platform.OS === 'web') {
-      users = MOCK_USERS.filter(u => u.role === role);
-    } else {
-      users = await userRepository.getByRole(role);
-    }
-    
-    if (users.length === 0) {
-      let allUsers: User[] = [];
-      if (Platform.OS === 'web') {
-        allUsers = MOCK_USERS;
-      } else {
-        allUsers = await userRepository.getAll();
-      }
-      if (allUsers.length > 0) {
-        const user = allUsers[0];
-        await setStoredAuth({ userId: user.id });
-        setState({ user, isLoading: false, isAuthenticated: true });
-        return true;
-      }
-      return false;
-    }
-    
-    const user = users[0];
-    await setStoredAuth({ userId: user.id });
-    setState({ user, isLoading: false, isAuthenticated: true });
-    return true;
-  }, []);
 
   const logout = useCallback(async () => {
     console.log('[AUTH] Logging out');
@@ -272,7 +156,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   return {
     ...state,
     login,
-    loginAsRole,
     logout,
     hasPermission,
     canCreate,

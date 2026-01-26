@@ -21,7 +21,7 @@ export default function LoginScreen() {
     if (isAuthenticated) {
       router.replace('/(tabs)');
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, router]);
 
   const isValidEmail = (email: string): boolean => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -102,14 +102,6 @@ export default function LoginScreen() {
             />
           </View>
 
-          <View style={styles.demoBox}>
-            <Text style={styles.demoTitle}>Comptes de démonstration</Text>
-            <Text style={styles.demoCredential}>Technicien: technicien@inspectra.fr / technicien123</Text>
-            <Text style={styles.demoCredential}>HSE Manager: hse@inspectra.fr / hse123</Text>
-            <Text style={styles.demoCredential}>Admin: admin@inspectra.fr / admin123</Text>
-            <Text style={styles.demoCredential}>Auditeur: auditeur@inspectra.fr / auditeur123</Text>
-          </View>
-
           <Text style={styles.hint}>
             Contactez votre administrateur si vous n&apos;avez pas de compte
           </Text>
@@ -172,32 +164,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: colors.textMuted,
     fontSize: typography.caption.fontSize,
-  },
-  demoBox: {
-    marginTop: spacing.xxl,
-    padding: spacing.md,
-    backgroundColor: colors.primary + '10',
-    borderRadius: borderRadius.md,
-    borderWidth: 1,
-    borderColor: colors.primary + '30',
-  },
-  demoTitle: {
-    fontSize: typography.bodySmall.fontSize,
-    fontWeight: '600' as const,
-    color: colors.primary,
-    marginBottom: spacing.sm,
-    textAlign: 'center',
-  },
-  demoCredential: {
-    fontSize: typography.bodySmall.fontSize,
-    color: colors.text,
-    textAlign: 'center',
-    marginBottom: spacing.xs,
-  },
-  demoNote: {
-    fontSize: typography.caption.fontSize,
-    color: colors.textMuted,
-    textAlign: 'center',
-    fontStyle: 'italic',
   },
 });

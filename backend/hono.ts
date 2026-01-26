@@ -11,8 +11,10 @@ import { createContext } from "./trpc/create-context";
 
 const app = new Hono();
 
-app.use("*", cors({
-  origin: [
+const isAllowedOrigin = (origin: string | undefined | null): boolean => {
+  if (!origin) return false;
+
+  const allowedExact = new Set<string>([
     'https://in-spectra.com',
     'https://www.in-spectra.com',
     'https://app.in-spectra.com',
@@ -20,11 +22,41 @@ app.use("*", cors({
     'http://localhost:8081',
     'http://localhost:19006',
     'http://localhost:3000',
-  ],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
-}));
+  ]);
+
+  if (allowedExact.has(origin)) return true;
+
+  try {
+    const url = new URL(origin);
+    if (url.hostname.endsWith('.rorktest.dev')) return true;
+    if (url.hostname.endsWith('.rork.app')) return true;
+    if (url.hostname.endsWith('.expo.dev')) return true;
+  } catch {
+    return false;
+  }
+
+  return false;
+};
+
+app.use(
+  '*',
+  cors({
+    origin: (origin) => {
+      const allowed = isAllowedOrigin(origin);
+      console.log('[CORS] Request origin', { origin, allowed });
+      return allowed ? origin : undefined;
+    },
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'trpc-accept',
+      'trpc-batch-mode',
+    ],
+    credentials: true,
+  })
+);
 
 const trpcHandler = trpcServer({
   endpoint: "/api/trpc",

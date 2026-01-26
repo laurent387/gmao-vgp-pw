@@ -2,23 +2,15 @@ import { httpLink } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 
-export const trpc = createTRPCReact<any>();
+import type { AppRouter } from "@/backend/trpc/app-router";
 
-const normalizeBaseUrl = (raw: string) => {
-  const trimmed = raw.trim().replace(/\/+$/, "");
-  return trimmed;
-};
+export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  const fromEnv = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  const fallback = "https://api.in-spectra.com";
-
-  const picked = normalizeBaseUrl(fromEnv && fromEnv.length > 0 ? fromEnv : fallback);
-
-  console.log("[TRPC] Base URL configured:", picked);
-  console.log("[TRPC] Env EXPO_PUBLIC_RORK_API_BASE_URL:", fromEnv ?? "<undefined>");
-
-  return picked;
+  // Production API - hardcoded to avoid env issues
+  const baseUrl = "https://api.in-spectra.com";
+  console.log("[TRPC] Using API:", baseUrl);
+  return baseUrl;
 };
 
 const baseUrl = getBaseUrl();
@@ -33,7 +25,7 @@ export const trpcClient = trpc.createClient({
         try {
           const response = await fetch(url, {
             ...options,
-            credentials: "include",
+            credentials: 'include',
           });
           if (!response.ok) {
             console.error("[TRPC] HTTP error:", response.status, response.statusText);

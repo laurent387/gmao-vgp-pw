@@ -28,6 +28,9 @@ export async function initializeDatabase(): Promise<void> {
       name TEXT NOT NULL,
       role TEXT NOT NULL,
       token_mock TEXT,
+      password_hash TEXT,
+      must_change_password INTEGER NOT NULL DEFAULT 0,
+      password_updated_at TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -238,6 +241,23 @@ export async function initializeDatabase(): Promise<void> {
   }
   try {
     await database.execAsync(`ALTER TABLE assets ADD COLUMN vgp_validity_months INTEGER;`);
+  } catch (e) {
+    // ignore
+  }
+
+  // Add password fields for existing databases (ignore errors if already present)
+  try {
+    await database.execAsync(`ALTER TABLE users ADD COLUMN password_hash TEXT;`);
+  } catch (e) {
+    // ignore
+  }
+  try {
+    await database.execAsync(`ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0;`);
+  } catch (e) {
+    // ignore
+  }
+  try {
+    await database.execAsync(`ALTER TABLE users ADD COLUMN password_updated_at TEXT;`);
   } catch (e) {
     // ignore
   }

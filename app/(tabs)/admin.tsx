@@ -80,10 +80,16 @@ export default function AdminScreen() {
   const controlTypesList = React.useMemo(() => normalizeList<ControlType>(controlTypes), [controlTypes]);
 
   const createUserMutation = trpc.admin.createUser.useMutation({
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: [['admin', 'listUsers']] });
       setModalVisible(false);
-      Alert.alert('Succès', 'Utilisateur créé');
+      const emailSent = (result as any)?.json?.emailSent ?? (result as any)?.emailSent;
+      Alert.alert(
+        'Succès',
+        emailSent === false
+          ? 'Utilisateur créé, mais l’email n’a pas pu être envoyé.'
+          : 'Utilisateur créé. Le mot de passe temporaire a été envoyé par email.'
+      );
     },
     onError: (e) => Alert.alert('Erreur', e.message),
   });

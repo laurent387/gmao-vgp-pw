@@ -44,10 +44,14 @@ export default function LoginScreen() {
     setIsLoading(true);
     setError('');
 
-    const success = await login(trimmedEmail, password);
+    const result = await login(trimmedEmail, password);
     
-    if (success) {
-      router.replace('/(tabs)');
+    if (result.success) {
+      if (result.mustChangePassword) {
+        router.replace('/change-password');
+      } else {
+        router.replace('/(tabs)');
+      }
     } else {
       setError('Identifiants incorrects');
     }

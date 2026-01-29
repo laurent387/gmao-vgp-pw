@@ -12,6 +12,7 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  mustChangePassword: boolean;
 }
 
 interface StoredAuth {
@@ -59,6 +60,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     user: null,
     isLoading: true,
     isAuthenticated: false,
+    mustChangePassword: false,
   });
   const hasLoadedRef = useRef(false);
 
@@ -87,7 +89,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
             created_at: new Date().toISOString(),
           };
           console.log('[AUTH] Restored session from backend token for:', user.email);
-          setState({ user, isLoading: false, isAuthenticated: true });
+          setState({ user, isLoading: false, isAuthenticated: true, mustChangePassword: false });
           return;
         }
       } catch (e) {
@@ -97,14 +99,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     
     if (stored?.user?.id) {
       console.log('[AUTH] Restored session for:', stored.user.email);
-      setState({ user: stored.user, isLoading: false, isAuthenticated: true });
+      setState({ user: stored.user, isLoading: false, isAuthenticated: true, mustChangePassword: false });
       return;
     }
     
-    setState({ user: null, isLoading: false, isAuthenticated: false });
+    setState({ user: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
   };
 
-  const login = useCallback(async (email: string, password: string): Promise<boolean> => {
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; mustChangePassword: boolean }> => {
     console.log('[AUTH] Attempting login for:', email);
     const normalizedEmail = email.toLowerCase().trim();
     
@@ -130,7 +132,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       if (!userResult) {
         console.log('[AUTH] Backend returned no user', payload);
-        return false;
+        return { success: false, mustChangePassword: false };
       }
 
       const user: User = {
@@ -142,14 +144,15 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
         created_at: new Date().toISOString(),
       };
 
+      const mustChangePassword = Boolean(payload?.mustChangePassword);
       await setStoredAuth({ user, token: tokenResult });
       setTrpcAuthToken(tokenResult);
-      setState({ user, isLoading: false, isAuthenticated: true });
+      setState({ user, isLoading: false, isAuthenticated: true, mustChangePassword });
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
-      return true;
+      return { success: true, mustChangePassword };
     } catch (error: any) {
       console.log('[AUTH] Backend login failed:', error?.message || 'Unknown error');
-      return false;
+      return { success: false, mustChangePassword: false };
     }
   }, []);
 
@@ -158,7 +161,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[AUTH] Logging out');
     await setStoredAuth(null);
     setTrpcAuthToken(null);
-    setState({ user: null, isLoading: false, isAuthenticated: false });
+    setState({ user: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
+  }, []);
+
+  const markPasswordChanged = useCallback(() => {
+    setState((prev) => ({ ...prev, mustChangePassword: false }));
   }, []);
 
   const hasPermission = useCallback((requiredRoles: UserRole[]): boolean => {
@@ -191,5 +198,6 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     canValidate,
     canEdit,
     isReadOnly,
+    markPasswordChanged,
   };
 });

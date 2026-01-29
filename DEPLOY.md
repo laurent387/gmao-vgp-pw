@@ -52,6 +52,14 @@ DATABASE_SSL=false
 
 # Client Configuration
 EXPO_PUBLIC_RORK_API_BASE_URL=https://api.in-spectra.com/api
+
+# SMTP (Email)
+SMTP_HOST=smtp.ionos.fr
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=postmaster@in-spectra.com
+SMTP_PASS=<strong-password>
+SMTP_FROM=postmaster@in-spectra.com
 ```
 
 ### 3. Database Setup

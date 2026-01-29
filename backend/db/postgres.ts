@@ -52,6 +52,9 @@ export async function ensurePgSchema(): Promise<void> {
       name TEXT NOT NULL,
       role TEXT NOT NULL,
       token_mock TEXT,
+      password_hash TEXT,
+      must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+      password_updated_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL
     );
 
@@ -267,5 +270,9 @@ export async function ensurePgSchema(): Promise<void> {
 
   console.log("[PG] Ensuring schema...");
   await p.query(schemaSql);
+  // Ensure new user auth columns exist for existing databases
+  await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;`);
+  await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_updated_at TIMESTAMPTZ;`);
   console.log("[PG] Schema ready");
 }

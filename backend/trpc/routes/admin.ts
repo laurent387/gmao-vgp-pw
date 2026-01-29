@@ -1,7 +1,10 @@
+import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { createTRPCRouter, protectedProcedure, adminProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
+import { sendEmail } from "../../services/email";
+import { generateTempPassword, hashPassword } from "../../services/password";
 
 function generateId(): string {
   return (
@@ -30,21 +33,37 @@ export const adminRouter = createTRPCRouter({
         email: z.string().email(),
         name: z.string().min(1),
         role: z.enum(["ADMIN", "HSE_MANAGER", "TECHNICIAN", "AUDITOR"]),
-        password: z.string().optional(),
+        sendPasswordEmail: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const id = generateId();
       const now = isoNow();
       const token = `token_${generateId()}`;
+      const tempPassword = generateTempPassword();
+      const passwordHash = hashPassword(tempPassword);
 
       await pgQuery(
-        `INSERT INTO users (id, email, name, role, token_mock, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [id, input.email, input.name, input.role, token, now]
+        `INSERT INTO users (id, email, name, role, token_mock, password_hash, must_change_password, password_updated_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE, NULL, $7)`,
+        [id, input.email, input.name, input.role, token, passwordHash, now]
       );
 
-      return { id, email: input.email, name: input.name, role: input.role, created_at: now };
+      let emailSent = false;
+      if (input.sendPasswordEmail !== false) {
+        try {
+          await sendEmail({
+            to: input.email,
+            subject: "Votre compte In‑Spectra",
+            text: `Bonjour ${input.name},\n\nVotre compte In‑Spectra est créé.\nMot de passe temporaire : ${tempPassword}\n\nMerci de changer ce mot de passe dès votre première connexion.`,
+          });
+          emailSent = true;
+        } catch (error: any) {
+          console.error("[ADMIN] Failed to send password email:", error?.message || error);
+        }
+      }
+
+      return { id, email: input.email, name: input.name, role: input.role, created_at: now, emailSent };
     }),
 
   updateUser: adminProcedure
@@ -90,6 +109,30 @@ export const adminRouter = createTRPCRouter({
       return { success: true };
     }),
 
+  sendTestEmail: adminProcedure
+    .input(
+      z.object({
+        to: z.string().email(),
+        subject: z.string().min(1).optional(),
+        text: z.string().min(1).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      try {
+        await sendEmail({
+          to: input.to,
+          subject: input.subject || "Test email In‑Spectra",
+          text: input.text || "Email de test envoyé depuis In‑Spectra.",
+        });
+
+        return { success: true };
+      } catch (error: any) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error?.message || "Email send failed",
+        });
+      }
+    }),
   // ============ SITES ============
   listSites: protectedProcedure.query(async () => {
     const sites = await pgQuery<any>(

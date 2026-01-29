@@ -1,7 +1,8 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { createTRPCRouter, publicProcedure } from "../create-context";
+import { createTRPCRouter, publicProcedure, protectedProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
+import { hashPassword, verifyPassword } from "../../services/password";
 
 interface DbUser {
   id: string;
@@ -9,6 +10,8 @@ interface DbUser {
   name: string;
   role: string;
   token_mock: string | null;
+  password_hash?: string | null;
+  must_change_password?: boolean | null;
   created_at: string;
 }
 
@@ -59,6 +62,13 @@ export const authRouter = createTRPCRouter({
         throw new TRPCError({ code: "BAD_REQUEST", message: "Identifiants incorrects" });
       }
 
+      if (user.password_hash) {
+        if (!password || !verifyPassword(String(password), user.password_hash)) {
+          console.log("[AUTH] Invalid password for:", email);
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Identifiants incorrects" });
+        }
+      }
+
       const token = `token-${user.id}-${Date.now()}`;
       console.log("[AUTH] Login successful for:", user.email);
 
@@ -70,6 +80,7 @@ export const authRouter = createTRPCRouter({
           role: user.role,
         },
         token,
+        mustChangePassword: Boolean(user.must_change_password),
       };
     }),
 
@@ -101,6 +112,40 @@ export const authRouter = createTRPCRouter({
       role: user.role,
     };
   }),
+
+  changePassword: protectedProcedure
+    .input(
+      z.object({
+        currentPassword: z.string().min(1),
+        newPassword: z.string().min(8),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Authentication required" });
+      }
+
+      const users = await pgQuery<DbUser>(
+        "SELECT id, password_hash FROM users WHERE id = $1",
+        [ctx.user.id]
+      );
+      const user = users[0];
+      if (!user || !user.password_hash) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Mot de passe actuel invalide" });
+      }
+
+      if (!verifyPassword(input.currentPassword, user.password_hash)) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Mot de passe actuel invalide" });
+      }
+
+      const newHash = hashPassword(input.newPassword);
+      await pgQuery(
+        "UPDATE users SET password_hash = $1, must_change_password = FALSE, password_updated_at = NOW() WHERE id = $2",
+        [newHash, ctx.user.id]
+      );
+
+      return { success: true };
+    }),
 
   listTechnicians: publicProcedure.query(async () => {
     console.log("[AUTH] Fetching technicians from database");

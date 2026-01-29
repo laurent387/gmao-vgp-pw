@@ -198,7 +198,7 @@ export function DocumentPicker({
 
   const getImageUri = (doc: Document): string => {
     if (doc.server_url) {
-      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
+      const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || '';
       return doc.server_url.startsWith('http') ? doc.server_url : `${baseUrl}${doc.server_url}`;
     }
     return doc.local_uri;

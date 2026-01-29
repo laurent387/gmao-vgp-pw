@@ -1,29 +1,15 @@
-# Welcome to your Rork app
+# GMAO VGP App
 
 ## Project info
 
-This is a native cross-platform mobile app created with [Rork](https://rork.com)
+This is a native cross-platform mobile app.
 
 **Platform**: Native iOS & Android app, exportable to web
 **Framework**: Expo Router + React Native
 
-## How can I edit this code?
+## How to work locally
 
-There are several ways of editing your native mobile application.
-
-### **Use Rork**
-
-Simply visit [rork.com](https://rork.com) and prompt to build your app with AI.
-
-Changes made via Rork will be committed automatically to this GitHub repo.
-
-Whenever you make a change in your local code editor and push it to GitHub, it will be also reflected in Rork.
-
-### **Use your preferred code editor**
-
-If you want to work locally using your own code editor, you can clone this repo and push changes. Pushed changes will also be reflected in Rork.
-
-If you are new to coding and unsure which editor to use, we recommend Cursor. If you're familiar with terminals, try Claude Code.
+If you want to work locally using your own code editor, you can clone this repo and push changes.
 
 The only requirement is having Node.js & Bun installed - [install Node.js with nvm](https://github.com/nvm-sh/nvm) and [install Bun](https://bun.sh/docs/installation)
 
@@ -39,7 +25,7 @@ cd <YOUR_PROJECT_NAME>
 # Step 3: Install the necessary dependencies.
 bun i
 
-# Step 4: Start the instant web preview of your Rork app in your browser, with auto-reloading of your changes
+# Step 4: Start the instant web preview of your app in your browser, with auto-reloading of your changes
 bun run start-web
 
 # Step 5: Start iOS preview
@@ -47,13 +33,13 @@ bun run start-web
 bun run start  # then press "i" in the terminal to open iOS Simulator
 # Option B (if supported by your environment):
 bun run start -- --ios
+
+# Step 6: Start Android preview
+# Option A (recommended):
+bun run start # then press "a" in the terminal to open Android Emulator
+# Option B (if supported by your environment):
+bun run start -- --android
 ```
-
-### **Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
 
 ## What technologies are used for this project?
 
@@ -70,7 +56,7 @@ This project is built with the most popular native mobile cross-platform technic
 
 ### **On your phone (Recommended)**
 
-1. **iOS**: Download the [Rork app from the App Store](https://apps.apple.com/app/rork) or [Expo Go](https://apps.apple.com/app/expo-go/id982107779)
+1. **iOS**: Download the [Expo Go app from the App Store](https://apps.apple.com/app/expo-go/id982107779)
 2. **Android**: Download the [Expo Go app from Google Play](https://play.google.com/store/apps/details?id=host.exp.exponent)
 3. Run `bun run start` and scan the QR code from your development server
 
@@ -80,16 +66,7 @@ Run `bun start-web` to test in a web browser. Note: The browser preview is great
 
 ### **iOS Simulator / Android Emulator**
 
-You can test Rork apps in Expo Go or Rork iOS app. You don't need XCode or Android Studio for most features.
-
-**When do you need Custom Development Builds?**
-
-- Native authentication (Face ID, Touch ID, Apple Sign In)
-- In-app purchases and subscriptions
-- Push notifications
-- Custom native modules
-
-Learn more: [Expo Custom Development Builds Guide](https://docs.expo.dev/develop/development-builds/introduction/)
+You can test apps in Expo Go. You don't need XCode or Android Studio for most features.
 
 If you have XCode (iOS) or Android Studio installed:
 
@@ -102,36 +79,6 @@ bun run start -- --android
 ```
 
 ## How can I deploy this project?
-
-### Backend API (VPS) — api.in-spectra.com
-- Stack: Hono + tRPC + PostgreSQL, runtime Bun/Node 20+, served via Nginx + systemd. Guide: [DEPLOY.md](DEPLOY.md).
-- Quick start VPS (Ubuntu 24.04):
-   ```bash
-   # clone + install
-   git clone <repo> /var/www/in-spectra-api && cd /var/www/in-spectra-api
-   curl -fsSL https://bun.sh/install | bash && sudo ln -sf ~/.bun/bin/bun /usr/local/bin/bun
-   bun install
-   cp .env.example .env  # renseigne DB et EXPO_PUBLIC_RORK_API_BASE_URL=https://api.in-spectra.com/api
-
-   # service
-   sudo systemctl daemon-reload && sudo systemctl enable --now in-spectra-api  # voir service dans DEPLOY.md
-
-   # reverse proxy + HTTPS
-   sudo nginx -t && sudo systemctl reload nginx
-   sudo certbot certonly --nginx -d api.in-spectra.com -d in-spectra.com -d app.in-spectra.com
-   ```
-- Checks: `curl https://api.in-spectra.com/` health; `curl -X POST https://api.in-spectra.com/api/trpc/auth.login`.
-
-### Domains
-- api.in-spectra.com → API (Nginx upstream 127.0.0.1:3000)
-- app.in-spectra.com → App web statique (si servie depuis VPS)
-- in-spectra.com → Landing statique
-Nginx server blocks prêts dans [DEPLOY.md](DEPLOY.md).
-
-### Prompt pour Rork (mettre à jour DEPLOY.md)
-```
-Tu es l’agent Rork côté app. Dès que tu ajoutes/changes une route API, une variable d’env ou un port, ouvre DEPLOY.md et mets-le à jour (env vars, endpoints, ports, Nginx, systemd). Garde api.in-spectra.com comme domaine API et le port 3000 en backend.
-```
 
 ### **Publish to App Store (iOS)**
 
@@ -226,101 +173,6 @@ This template includes:
 └── tsconfig.json        # TypeScript configuration
 ```
 
-## Custom Development Builds
-
-For advanced native features, you'll need to create a Custom Development Build instead of using Expo Go.
-
-### **When do you need a Custom Development Build?**
-
-- **Native Authentication**: Face ID, Touch ID, Apple Sign In, Google Sign In
-- **In-App Purchases**: App Store and Google Play subscriptions
-- **Advanced Native Features**: Third-party SDKs, platform-specifc features (e.g. Widgets on iOS)
-- **Background Processing**: Background tasks, location tracking
-
-### **Creating a Custom Development Build**
-
-```bash
-# Install EAS CLI
-bun i -g @expo/eas-cli
-
-# Configure your project for development builds
-eas build:configure
-
-# Create a development build for your device
-eas build --profile development --platform ios
-eas build --profile development --platform android
-
-# Install the development build on your device and start developing
-bun start --dev-client
-```
-
-**Learn more:**
-
-- [Development Builds Introduction](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Creating Development Builds](https://docs.expo.dev/develop/development-builds/create-a-build/)
-- [Installing Development Builds](https://docs.expo.dev/develop/development-builds/installation/)
-
-## Advanced Features
-
-### **Add a Database**
-
-Integrate with backend services:
-
-- **Supabase** - PostgreSQL database with real-time features
-- **Firebase** - Google's mobile development platform
-- **Custom API** - Connect to your own backend
-
-### **Add Authentication**
-
-Implement user authentication:
-
-**Basic Authentication (works in Expo Go):**
-
-- **Expo AuthSession** - OAuth providers (Google, Facebook, Apple) - [Guide](https://docs.expo.dev/guides/authentication/)
-- **Supabase Auth** - Email/password and social login - [Integration Guide](https://supabase.com/docs/guides/getting-started/tutorials/with-expo-react-native)
-- **Firebase Auth** - Comprehensive authentication solution - [Setup Guide](https://docs.expo.dev/guides/using-firebase/)
-
-**Native Authentication (requires Custom Development Build):**
-
-- **Apple Sign In** - Native Apple authentication - [Implementation Guide](https://docs.expo.dev/versions/latest/sdk/apple-authentication/)
-- **Google Sign In** - Native Google authentication - [Setup Guide](https://docs.expo.dev/guides/google-authentication/)
-
-### **Add Push Notifications**
-
-Send notifications to your users:
-
-- **Expo Notifications** - Cross-platform push notifications
-- **Firebase Cloud Messaging** - Advanced notification features
-
-### **Add Payments**
-
-Monetize your app:
-
-**Web & Credit Card Payments (works in Expo Go):**
-
-- **Stripe** - Credit card payments and subscriptions - [Expo + Stripe Guide](https://docs.expo.dev/guides/using-stripe/)
-- **PayPal** - PayPal payments integration - [Setup Guide](https://developer.paypal.com/docs/checkout/mobile/react-native/)
-
-**Native In-App Purchases (requires Custom Development Build):**
-
-- **RevenueCat** - Cross-platform in-app purchases and subscriptions - [Expo Integration Guide](https://www.revenuecat.com/docs/expo)
-- **Expo In-App Purchases** - Direct App Store/Google Play integration - [Implementation Guide](https://docs.expo.dev/versions/latest/sdk/in-app-purchases/)
-
-**Paywall Optimization:**
-
-- **Superwall** - Paywall A/B testing and optimization - [React Native SDK](https://docs.superwall.com/docs/react-native)
-- **Adapty** - Mobile subscription analytics and paywalls - [Expo Integration](https://docs.adapty.io/docs/expo)
-
-## I want to use a custom domain - is that possible?
-
-For web deployments, you can use custom domains with:
-
-- **EAS Hosting** - Custom domains available on paid plans
-- **Netlify** - Free custom domain support
-- **Vercel** - Custom domains with automatic SSL
-
-For mobile apps, you'll configure your app's deep linking scheme in `app.json`.
-
 ## Troubleshooting
 
 ### **App not loading on device?**
@@ -334,15 +186,3 @@ For mobile apps, you'll configure your app's deep linking scheme in `app.json`.
 1. Clear your cache: `bunx expo start --clear`
 2. Delete `node_modules` and reinstall: `rm -rf node_modules && bun install`
 3. Check [Expo's troubleshooting guide](https://docs.expo.dev/troubleshooting/build-errors/)
-
-### **Need help with native features?**
-
-- Check [Expo's documentation](https://docs.expo.dev/) for native APIs
-- Browse [React Native's documentation](https://reactnative.dev/docs/getting-started) for core components
-- Visit [Rork's FAQ](https://rork.com/faq) for platform-specific questions
-
-## About Rork
-
-Rork builds fully native mobile apps using React Native and Expo - the same technology stack used by Discord, Shopify, Coinbase, Instagram, and nearly 30% of the top 100 apps on the App Store.
-
-Your Rork app is production-ready and can be published to both the App Store and Google Play Store. You can also export your app to run on the web, making it truly cross-platform.

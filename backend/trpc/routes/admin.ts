@@ -17,23 +17,28 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
-// Helper to unwrap input that may be wrapped as { json: ... } from web client
-// With superjson transformer, input should already be deserialized
+// Helper to unwrap input that may be wrapped or arrive as undefined with z.any()
+// Priority: ctx.rawJson.json > ctx.rawJson > input
 function unwrapInput<T>(input: any, ctx?: any): T {
-  const raw = input ?? {};
+  const rawJson = (ctx as any)?.rawJson;
   
-  // If superjson already deserialized, return as-is
-  if (raw.email || raw.name || raw.id || raw.code) {
-    return raw;
+  // superjson envelope: { json: { ... }, meta: {...} }
+  if (rawJson?.json) {
+    return rawJson.json;
   }
   
-  // Try various wrapping patterns
-  const body = (ctx as any)?.rawJson ?? {};
-  const unwrapped = raw.json ?? body?.json ?? raw ?? body;
+  // Direct JSON object in rawJson
+  if (rawJson && typeof rawJson === 'object' && Object.keys(rawJson).length > 0) {
+    return rawJson;
+  }
   
-  console.log("[UNWRAP] input:", JSON.stringify(input), "result:", JSON.stringify(unwrapped));
+  // Already parsed by tRPC
+  if (input && typeof input === 'object' && Object.keys(input).length > 0) {
+    return input;
+  }
   
-  return unwrapped;
+  // Fallback to empty object
+  return {} as T;
 }
 
 
@@ -49,12 +54,9 @@ export const adminRouter = createTRPCRouter({
   createUser: adminProcedure
     .input(z.any())
     .mutation(async ({ input, ctx }) => {
-      console.log("[ADMIN] createUser raw input:", JSON.stringify(input));
       const data = unwrapInput<{ email: string; name: string; role: string; sendPasswordEmail?: boolean }>(input, ctx);
-      console.log("[ADMIN] createUser unwrapped data:", JSON.stringify(data));
       
-      if (!data.email || !data.name || !data.role) {
-        console.log("[ADMIN] createUser validation failed - missing fields");
+      if (!data?.email || !data?.name || !data?.role) {
         throw new TRPCError({ code: "BAD_REQUEST", message: "Email, nom et rôle requis" });
       }
 
@@ -131,6 +133,62 @@ export const adminRouter = createTRPCRouter({
       }
       await pgQuery("DELETE FROM users WHERE id = $1", [data.id]);
       return { success: true };
+    }),
+
+  sendPasswordResetToUser: adminProcedure
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ userId: string }>(input, ctx);
+      if (!data.userId) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID utilisateur requis" });
+      }
+
+      // Get user info
+      const users = await pgQuery<{ id: string; email: string; name: string }>(
+        "SELECT id, email, name FROM users WHERE id = $1",
+        [data.userId]
+      );
+      const user = users[0];
+      if (!user) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Utilisateur non trouvé" });
+      }
+
+      // Generate new temporary password
+      const tempPassword = generateTempPassword();
+      const passwordHash = hashPassword(tempPassword);
+
+      // Update user password and set must_change_password flag
+      await pgQuery(
+        "UPDATE users SET password_hash = $1, must_change_password = TRUE, password_updated_at = NOW() WHERE id = $2",
+        [passwordHash, user.id]
+      );
+
+      // Send email with new password
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: "Nouveau mot de passe - In-Spectra",
+          text: `Bonjour ${user.name},\n\nUn nouveau mot de passe temporaire a été généré pour votre compte In-Spectra.\n\nMot de passe temporaire : ${tempPassword}\n\nMerci de changer ce mot de passe dès votre première connexion.\n\nCordialement,\nL'équipe In-Spectra`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2 style="color: #3B82F6;">Nouveau mot de passe</h2>
+              <p>Bonjour <strong>${user.name}</strong>,</p>
+              <p>Un nouveau mot de passe temporaire a été généré pour votre compte In-Spectra.</p>
+              <p style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center;">
+                <strong>${tempPassword}</strong>
+              </p>
+              <p style="color: #ef4444; font-weight: bold;">⚠️ Merci de changer ce mot de passe dès votre première connexion.</p>
+              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+              <p style="color: #999; font-size: 12px;">L'équipe In-Spectra</p>
+            </div>
+          `,
+        });
+        console.log("[ADMIN] Password reset email sent to:", user.email);
+        return { success: true, emailSent: true };
+      } catch (error: any) {
+        console.error("[ADMIN] Failed to send password reset email:", error?.message || error);
+        return { success: true, emailSent: false };
+      }
     }),
 
   sendTestEmail: adminProcedure

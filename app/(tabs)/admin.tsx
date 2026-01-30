@@ -2,7 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Users, MapPin, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp, Building2, Wrench, Eye } from 'lucide-react-native';
+import { Users, MapPin, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp, Building2, Wrench, Eye, KeyRound } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -134,6 +134,17 @@ export default function AdminScreen() {
     onError: (e) => Alert.alert('Erreur', e.message),
   });
 
+  const sendPasswordResetMutation = trpc.admin.sendPasswordResetToUser.useMutation({
+    onSuccess: (data) => {
+      if (data.emailSent) {
+        Alert.alert('Succès', 'Un nouveau mot de passe a été envoyé par email');
+      } else {
+        Alert.alert('Attention', 'Le mot de passe a été réinitialisé mais l\'email n\'a pas pu être envoyé');
+      }
+    },
+    onError: (e) => Alert.alert('Erreur', e.message),
+  });
+
   const createClientMutation = trpc.admin.createClient.useMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [['admin', 'listClients']] });
@@ -254,6 +265,20 @@ export default function AdminScreen() {
     );
   };
 
+  const confirmPasswordReset = (userId: string, userName: string, userEmail: string) => {
+    Alert.alert(
+      'Réinitialiser le mot de passe',
+      `Envoyer un nouveau mot de passe à ${userName} (${userEmail}) ?`,
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Envoyer',
+          onPress: () => sendPasswordResetMutation.mutate({ userId }),
+        },
+      ]
+    );
+  };
+
   if (!isAdmin) {
     return (
       <View style={styles.container}>
@@ -320,6 +345,13 @@ export default function AdminScreen() {
                   </View>
                 </View>
                 <View style={styles.listItemActions}>
+                  <TouchableOpacity 
+                    style={styles.actionBtn} 
+                    onPress={() => confirmPasswordReset(u.id, u.name, u.email)}
+                    disabled={sendPasswordResetMutation.isPending}
+                  >
+                    <KeyRound size={16} color={colors.warning} />
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(u)}>
                     <Pencil size={16} color={colors.primary} />
                   </TouchableOpacity>

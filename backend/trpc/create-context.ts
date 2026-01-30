@@ -27,9 +27,9 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
     const clone = opts.req.clone();
     rawBody = await clone.text();
     rawJson = rawBody ? JSON.parse(rawBody) : null;
-    if (opts.req.url.includes("/api/trpc/vgp.createReport")) {
-      console.log("[CTX] vgp.createReport rawBody:", rawBody);
-      console.log("[CTX] vgp.createReport rawJson:", rawJson);
+    // Log for all admin mutations
+    if (opts.req.url.includes("/api/trpc/admin.")) {
+      console.log("[CTX] Admin mutation rawBody:", rawBody?.substring(0, 500));
     }
   } catch (e) {
     console.warn("[CONTEXT] Unable to read raw body", e);

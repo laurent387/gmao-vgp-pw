@@ -8,7 +8,7 @@ import { SearchInput } from '@/components/Input';
 import { DataTable, type Column } from '@/components/DataTable';
 import { DesktopFilterBar } from '@/components/DesktopFilterBar';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
-import { useIsDesktop } from '@/hooks/useResponsive';
+import { useIsDesktop, useScreenSize } from '@/hooks/useResponsive';
 import { assetRepository, AssetFilters } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
 import type { Asset, AssetStatus, Client, Site } from '@/types';

@@ -18,11 +18,22 @@ function isoNow(): string {
 }
 
 // Helper to unwrap input that may be wrapped as { json: ... } from web client
+// With superjson transformer, input should already be deserialized
 function unwrapInput<T>(input: any, ctx?: any): T {
   const raw = input ?? {};
-  const body = (ctx as any)?.rawJson ?? {};
+  
+  // If superjson already deserialized, return as-is
+  if (raw.email || raw.name || raw.id || raw.code) {
+    return raw;
+  }
+  
   // Try various wrapping patterns
-  return raw.json ?? body?.json ?? raw ?? body;
+  const body = (ctx as any)?.rawJson ?? {};
+  const unwrapped = raw.json ?? body?.json ?? raw ?? body;
+  
+  console.log("[UNWRAP] input:", JSON.stringify(input), "result:", JSON.stringify(unwrapped));
+  
+  return unwrapped;
 }
 
 

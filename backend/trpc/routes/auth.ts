@@ -198,17 +198,26 @@ export const authRouter = createTRPCRouter({
     }),
 
   requestPasswordReset: publicProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-      })
-    )
-    .mutation(async ({ input }) => {
-      console.log("[AUTH] Password reset requested for:", input.email);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      // Handle wrapped input from web client
+      const raw = (input ?? {}) as any;
+      const body = (ctx as any)?.rawJson ?? {};
+      const email =
+        raw.email ??
+        raw.json?.email ??
+        body?.email ??
+        body?.json?.email;
+
+      if (!email || typeof email !== "string") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Email requis" });
+      }
+
+      console.log("[AUTH] Password reset requested for:", email);
 
       const users = await pgQuery<DbUser>(
         "SELECT id, email, name FROM users WHERE LOWER(email) = LOWER($1)",
-        [input.email]
+        [email]
       );
 
       const user = users[0];
@@ -262,19 +271,35 @@ export const authRouter = createTRPCRouter({
     }),
 
   resetPassword: publicProcedure
-    .input(
-      z.object({
-        token: z.string().min(1),
-        newPassword: z.string().min(8),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      // Handle wrapped input from web client
+      const raw = (input ?? {}) as any;
+      const body = (ctx as any)?.rawJson ?? {};
+      const token =
+        raw.token ??
+        raw.json?.token ??
+        body?.token ??
+        body?.json?.token;
+      const newPassword =
+        raw.newPassword ??
+        raw.json?.newPassword ??
+        body?.newPassword ??
+        body?.json?.newPassword;
+
+      if (!token || typeof token !== "string") {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Token requis" });
+      }
+      if (!newPassword || typeof newPassword !== "string" || newPassword.length < 8) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Mot de passe requis (min. 8 caractères)" });
+      }
+
       console.log("[AUTH] Attempting password reset with token");
 
       // Find token and check expiration
       const tokens = await pgQuery<{ user_id: string; expires_at: string }>(
         "SELECT user_id, expires_at FROM password_reset_tokens WHERE token = $1",
-        [input.token]
+        [token]
       );
 
       const tokenRecord = tokens[0];
@@ -284,12 +309,12 @@ export const authRouter = createTRPCRouter({
 
       if (new Date(tokenRecord.expires_at) < new Date()) {
         // Delete expired token
-        await pgQuery("DELETE FROM password_reset_tokens WHERE token = $1", [input.token]);
+        await pgQuery("DELETE FROM password_reset_tokens WHERE token = $1", [token]);
         throw new TRPCError({ code: "BAD_REQUEST", message: "Lien expiré" });
       }
 
       // Update password
-      const newHash = hashPassword(input.newPassword);
+      const newHash = hashPassword(newPassword);
       await pgQuery(
         "UPDATE users SET password_hash = $1, must_change_password = FALSE, password_updated_at = NOW() WHERE id = $2",
         [newHash, tokenRecord.user_id]

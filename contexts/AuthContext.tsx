@@ -78,12 +78,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (stored?.token) {
       try {
         setTrpcAuthToken(stored.token);
-        const me = await trpcClient.auth.me.query();
-        if (me) {
+        const meResult = await trpcClient.auth.me.query();
+        // Handle potential wrapping: { json: { id, email, ... } } or direct { id, email, ... }
+        const me: any = (meResult as any)?.json ?? meResult;
+        if (me?.id && me?.email) {
           const user: User = {
             id: me.id,
             email: me.email,
-            name: me.name,
+            name: me.name || me.email,
             role: me.role as UserRole,
             token_mock: stored.token,
             created_at: new Date().toISOString(),

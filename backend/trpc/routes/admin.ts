@@ -17,6 +17,14 @@ function isoNow(): string {
   return new Date().toISOString();
 }
 
+// Helper to unwrap input that may be wrapped as { json: ... } from web client
+function unwrapInput<T>(input: any, ctx?: any): T {
+  const raw = input ?? {};
+  const body = (ctx as any)?.rawJson ?? {};
+  // Try various wrapping patterns
+  return raw.json ?? body?.json ?? raw ?? body;
+}
+
 
 export const adminRouter = createTRPCRouter({
   // ============ USERS ============
@@ -28,15 +36,14 @@ export const adminRouter = createTRPCRouter({
   }),
 
   createUser: adminProcedure
-    .input(
-      z.object({
-        email: z.string().email(),
-        name: z.string().min(1),
-        role: z.enum(["ADMIN", "HSE_MANAGER", "TECHNICIAN", "AUDITOR"]),
-        sendPasswordEmail: z.boolean().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ email: string; name: string; role: string; sendPasswordEmail?: boolean }>(input, ctx);
+      
+      if (!data.email || !data.name || !data.role) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Email, nom et rôle requis" });
+      }
+
       const id = generateId();
       const now = isoNow();
       const token = `token_${generateId()}`;
@@ -46,16 +53,16 @@ export const adminRouter = createTRPCRouter({
       await pgQuery(
         `INSERT INTO users (id, email, name, role, token_mock, password_hash, must_change_password, password_updated_at, created_at)
          VALUES ($1, $2, $3, $4, $5, $6, TRUE, NULL, $7)`,
-        [id, input.email, input.name, input.role, token, passwordHash, now]
+        [id, data.email, data.name, data.role, token, passwordHash, now]
       );
 
       let emailSent = false;
-      if (input.sendPasswordEmail !== false) {
+      if (data.sendPasswordEmail !== false) {
         try {
           await sendEmail({
-            to: input.email,
+            to: data.email,
             subject: "Votre compte In‑Spectra",
-            text: `Bonjour ${input.name},\n\nVotre compte In‑Spectra est créé.\nMot de passe temporaire : ${tempPassword}\n\nMerci de changer ce mot de passe dès votre première connexion.`,
+            text: `Bonjour ${data.name},\n\nVotre compte In‑Spectra est créé.\nMot de passe temporaire : ${tempPassword}\n\nMerci de changer ce mot de passe dès votre première connexion.`,
           });
           emailSent = true;
         } catch (error: any) {
@@ -63,66 +70,67 @@ export const adminRouter = createTRPCRouter({
         }
       }
 
-      return { id, email: input.email, name: input.name, role: input.role, created_at: now, emailSent };
+      return { id, email: data.email, name: data.name, role: data.role, created_at: now, emailSent };
     }),
 
   updateUser: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        email: z.string().email().optional(),
-        name: z.string().min(1).optional(),
-        role: z.enum(["ADMIN", "HSE_MANAGER", "TECHNICIAN", "AUDITOR"]).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; email?: string; name?: string; role?: string }>(input, ctx);
+      
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID utilisateur requis" });
+      }
+
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
 
-      if (input.email) {
+      if (data.email) {
         updates.push(`email = $${idx++}`);
-        params.push(input.email);
+        params.push(data.email);
       }
-      if (input.name) {
+      if (data.name) {
         updates.push(`name = $${idx++}`);
-        params.push(input.name);
+        params.push(data.name);
       }
-      if (input.role) {
+      if (data.role) {
         updates.push(`role = $${idx++}`);
-        params.push(input.role);
+        params.push(data.role);
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE users SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
-      const users = await pgQuery<any>("SELECT * FROM users WHERE id = $1", [input.id]);
+      const users = await pgQuery<any>("SELECT * FROM users WHERE id = $1", [data.id]);
       return users[0] || null;
     }),
 
   deleteUser: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM users WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID utilisateur requis" });
+      }
+      await pgQuery("DELETE FROM users WHERE id = $1", [data.id]);
       return { success: true };
     }),
 
   sendTestEmail: adminProcedure
-    .input(
-      z.object({
-        to: z.string().email(),
-        subject: z.string().min(1).optional(),
-        text: z.string().min(1).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ to: string; subject?: string; text?: string }>(input, ctx);
+      if (!data.to) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Email destinataire requis" });
+      }
       try {
         await sendEmail({
-          to: input.to,
-          subject: input.subject || "Test email In‑Spectra",
-          text: input.text || "Email de test envoyé depuis In‑Spectra.",
+          to: data.to,
+          subject: data.subject || "Test email In‑Spectra",
+          text: data.text || "Email de test envoyé depuis In‑Spectra.",
         });
 
         return { success: true };
@@ -203,50 +211,62 @@ export const adminRouter = createTRPCRouter({
     }),
 
   createClient: adminProcedure
-    .input(z.object({ name: z.string().min(1) }))
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ name: string }>(input, ctx);
+      if (!data.name) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nom du client requis" });
+      }
       const id = generateId();
       const now = isoNow();
       await pgQuery(
         "INSERT INTO clients (id, name, status, created_at) VALUES ($1, $2, 'ACTIVE', $3)",
-        [id, input.name, now]
+        [id, data.name, now]
       );
-      return { id, name: input.name, status: 'ACTIVE', created_at: now };
+      return { id, name: data.name, status: 'ACTIVE', created_at: now };
     }),
 
   updateClient: adminProcedure
-    .input(z.object({ id: z.string(), name: z.string().min(1) }))
-    .mutation(async ({ input }) => {
-      await pgQuery("UPDATE clients SET name = $1 WHERE id = $2", [input.name, input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; name: string }>(input, ctx);
+      if (!data.id || !data.name) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID et nom requis" });
+      }
+      await pgQuery("UPDATE clients SET name = $1 WHERE id = $2", [data.name, data.id]);
       const clients = await pgQuery<any>(
         `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
                 address, access_instructions, billing_address, billing_email, internal_notes, 
                 status, created_at 
          FROM clients WHERE id = $1`,
-        [input.id]
+        [data.id]
       );
       return clients[0] || null;
     }),
 
   updateClientFull: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        name: z.string().min(1).optional(),
-        siret: z.string().optional().nullable(),
-        tva_number: z.string().optional().nullable(),
-        contact_name: z.string().optional().nullable(),
-        contact_email: z.string().optional().nullable(),
-        contact_phone: z.string().optional().nullable(),
-        address: z.string().optional().nullable(),
-        access_instructions: z.string().optional().nullable(),
-        billing_address: z.string().optional().nullable(),
-        billing_email: z.string().optional().nullable(),
-        internal_notes: z.string().optional().nullable(),
-        status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'SUSPENDED']).optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{
+        id: string;
+        name?: string;
+        siret?: string | null;
+        tva_number?: string | null;
+        contact_name?: string | null;
+        contact_email?: string | null;
+        contact_phone?: string | null;
+        address?: string | null;
+        access_instructions?: string | null;
+        billing_address?: string | null;
+        billing_email?: string | null;
+        internal_notes?: string | null;
+        status?: string;
+      }>(input, ctx);
+
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID client requis" });
+      }
+
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
@@ -257,15 +277,15 @@ export const adminRouter = createTRPCRouter({
       ];
 
       for (const field of fields) {
-        if ((input as any)[field] !== undefined) {
+        if ((data as any)[field] !== undefined) {
           updates.push(`${field} = $${idx++}`);
-          params.push((input as any)[field]);
+          params.push((data as any)[field]);
         }
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE clients SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
       const clients = await pgQuery<any>(
@@ -273,15 +293,19 @@ export const adminRouter = createTRPCRouter({
                 address, access_instructions, billing_address, billing_email, internal_notes, 
                 status, created_at 
          FROM clients WHERE id = $1`,
-        [input.id]
+        [data.id]
       );
       return clients[0] || null;
     }),
 
   deleteClient: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM clients WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID client requis" });
+      }
+      await pgQuery("DELETE FROM clients WHERE id = $1", [data.id]);
       return { success: true };
     }),
   // ============ SITES ============
@@ -295,18 +319,16 @@ export const adminRouter = createTRPCRouter({
   }),
 
   createSite: adminProcedure
-    .input(
-      z.object({
-        name: z.string().min(1),
-        address: z.string().optional(),
-        client_id: z.string().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ name: string; address?: string; client_id?: string }>(input, ctx);
+      if (!data.name) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Nom du site requis" });
+      }
       const id = generateId();
       const now = isoNow();
 
-      let clientId = input.client_id;
+      let clientId = data.client_id;
       if (!clientId) {
         const clients = await pgQuery<any>("SELECT id FROM clients LIMIT 1");
         if (clients.length === 0) {
@@ -324,53 +346,54 @@ export const adminRouter = createTRPCRouter({
       await pgQuery(
         `INSERT INTO sites (id, client_id, name, address, created_at)
          VALUES ($1, $2, $3, $4, $5)`,
-        [id, clientId, input.name, input.address || null, now]
+        [id, clientId, data.name, data.address || null, now]
       );
 
-      return { id, name: input.name, address: input.address || null, client_id: clientId, created_at: now };
+      return { id, name: data.name, address: data.address || null, client_id: clientId, created_at: now };
     }),
 
   updateSite: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        name: z.string().min(1).optional(),
-        address: z.string().optional(),
-        client_id: z.string().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; name?: string; address?: string; client_id?: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID site requis" });
+      }
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
 
-      if (input.name) {
+      if (data.name) {
         updates.push(`name = $${idx++}`);
-        params.push(input.name);
+        params.push(data.name);
       }
-      if (input.address !== undefined) {
+      if (data.address !== undefined) {
         updates.push(`address = $${idx++}`);
-        params.push(input.address);
+        params.push(data.address);
       }
-      if (input.client_id !== undefined) {
+      if (data.client_id !== undefined) {
         updates.push(`client_id = $${idx++}`);
-        params.push(input.client_id);
+        params.push(data.client_id);
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE sites SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
-      const sites = await pgQuery<any>("SELECT * FROM sites WHERE id = $1", [input.id]);
+      const sites = await pgQuery<any>("SELECT * FROM sites WHERE id = $1", [data.id]);
       return sites[0] || null;
     }),
 
   deleteSite: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM zones WHERE site_id = $1", [input.id]);
-      await pgQuery("DELETE FROM sites WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID site requis" });
+      }
+      await pgQuery("DELETE FROM zones WHERE site_id = $1", [data.id]);
+      await pgQuery("DELETE FROM sites WHERE id = $1", [data.id]);
       return { success: true };
     }),
 
@@ -392,58 +415,59 @@ export const adminRouter = createTRPCRouter({
     }),
 
   createZone: adminProcedure
-    .input(
-      z.object({
-        site_id: z.string(),
-        name: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ site_id: string; name: string }>(input, ctx);
+      if (!data.site_id || !data.name) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID site et nom requis" });
+      }
       const id = generateId();
 
       await pgQuery(
         "INSERT INTO zones (id, site_id, name) VALUES ($1, $2, $3)",
-        [id, input.site_id, input.name]
+        [id, data.site_id, data.name]
       );
 
-      return { id, site_id: input.site_id, name: input.name };
+      return { id, site_id: data.site_id, name: data.name };
     }),
 
   updateZone: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        name: z.string().min(1).optional(),
-        site_id: z.string().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; name?: string; site_id?: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID zone requis" });
+      }
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
 
-      if (input.name) {
+      if (data.name) {
         updates.push(`name = $${idx++}`);
-        params.push(input.name);
+        params.push(data.name);
       }
-      if (input.site_id) {
+      if (data.site_id) {
         updates.push(`site_id = $${idx++}`);
-        params.push(input.site_id);
+        params.push(data.site_id);
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE zones SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
-      const zones = await pgQuery<any>("SELECT * FROM zones WHERE id = $1", [input.id]);
+      const zones = await pgQuery<any>("SELECT * FROM zones WHERE id = $1", [data.id]);
       return zones[0] || null;
     }),
 
   deleteZone: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM zones WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID zone requis" });
+      }
+      await pgQuery("DELETE FROM zones WHERE id = $1", [data.id]);
       return { success: true };
     }),
 
@@ -453,76 +477,72 @@ export const adminRouter = createTRPCRouter({
   }),
 
   createControlType: adminProcedure
-    .input(
-      z.object({
-        code: z.string().min(1),
-        label: z.string().min(1),
-        description: z.string().optional(),
-        periodicity_days: z.number().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ code: string; label: string; description?: string; periodicity_days: number }>(input, ctx);
+      if (!data.code || !data.label || !data.periodicity_days) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Code, label et périodicité requis" });
+      }
       const id = generateId();
 
       await pgQuery(
         `INSERT INTO control_types (id, code, label, description, periodicity_days, active)
          VALUES ($1, $2, $3, $4, $5, true)`,
-        [id, input.code, input.label, input.description || null, input.periodicity_days]
+        [id, data.code, data.label, data.description || null, data.periodicity_days]
       );
 
-      return { id, ...input, active: true };
+      return { id, ...data, active: true };
     }),
 
   updateControlType: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        code: z.string().min(1).optional(),
-        label: z.string().min(1).optional(),
-        description: z.string().optional(),
-        periodicity_days: z.number().min(1).optional(),
-        active: z.boolean().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; code?: string; label?: string; description?: string; periodicity_days?: number; active?: boolean }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID type de contrôle requis" });
+      }
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
 
-      if (input.code) {
+      if (data.code) {
         updates.push(`code = $${idx++}`);
-        params.push(input.code);
+        params.push(data.code);
       }
-      if (input.label) {
+      if (data.label) {
         updates.push(`label = $${idx++}`);
-        params.push(input.label);
+        params.push(data.label);
       }
-      if (input.description !== undefined) {
+      if (data.description !== undefined) {
         updates.push(`description = $${idx++}`);
-        params.push(input.description);
+        params.push(data.description);
       }
-      if (input.periodicity_days) {
+      if (data.periodicity_days) {
         updates.push(`periodicity_days = $${idx++}`);
-        params.push(input.periodicity_days);
+        params.push(data.periodicity_days);
       }
-      if (input.active !== undefined) {
+      if (data.active !== undefined) {
         updates.push(`active = $${idx++}`);
-        params.push(input.active);
+        params.push(data.active);
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE control_types SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
-      const types = await pgQuery<any>("SELECT * FROM control_types WHERE id = $1", [input.id]);
+      const types = await pgQuery<any>("SELECT * FROM control_types WHERE id = $1", [data.id]);
       return types[0] || null;
     }),
 
   deleteControlType: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("UPDATE control_types SET active = false WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID type de contrôle requis" });
+      }
+      await pgQuery("UPDATE control_types SET active = false WHERE id = $1", [data.id]);
       return { success: true };
     }),
 
@@ -545,30 +565,32 @@ export const adminRouter = createTRPCRouter({
     }),
 
   createChecklistTemplate: adminProcedure
-    .input(
-      z.object({
-        control_type_id: z.string(),
-        asset_category: z.string().optional(),
-        name: z.string().min(1),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ control_type_id: string; asset_category?: string; name: string }>(input, ctx);
+      if (!data.control_type_id || !data.name) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Type de contrôle et nom requis" });
+      }
       const id = generateId();
 
       await pgQuery(
         `INSERT INTO checklist_templates (id, control_type_id, asset_category, name)
          VALUES ($1, $2, $3, $4)`,
-        [id, input.control_type_id, input.asset_category || null, input.name]
+        [id, data.control_type_id, data.asset_category || null, data.name]
       );
 
-      return { id, ...input };
+      return { id, ...data };
     }),
 
   deleteChecklistTemplate: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM checklist_items WHERE template_id = $1", [input.id]);
-      await pgQuery("DELETE FROM checklist_templates WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID template requis" });
+      }
+      await pgQuery("DELETE FROM checklist_items WHERE template_id = $1", [data.id]);
+      await pgQuery("DELETE FROM checklist_templates WHERE id = $1", [data.id]);
       return { success: true };
     }),
 
@@ -583,78 +605,72 @@ export const adminRouter = createTRPCRouter({
     }),
 
   createChecklistItem: adminProcedure
-    .input(
-      z.object({
-        template_id: z.string(),
-        label: z.string().min(1),
-        field_type: z.enum(["BOOL", "NUM", "TEXT"]),
-        required: z.boolean().default(true),
-        help_text: z.string().optional(),
-        sort_order: z.number().default(0),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ template_id: string; label: string; field_type: string; required?: boolean; help_text?: string; sort_order?: number }>(input, ctx);
+      if (!data.template_id || !data.label || !data.field_type) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Template, label et type requis" });
+      }
       const id = generateId();
 
       await pgQuery(
         `INSERT INTO checklist_items (id, template_id, label, field_type, required, help_text, sort_order)
          VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [id, input.template_id, input.label, input.field_type, input.required, input.help_text || null, input.sort_order]
+        [id, data.template_id, data.label, data.field_type, data.required !== false, data.help_text || null, data.sort_order || 0]
       );
 
-      return { id, ...input };
+      return { id, ...data };
     }),
 
   updateChecklistItem: adminProcedure
-    .input(
-      z.object({
-        id: z.string(),
-        label: z.string().min(1).optional(),
-        field_type: z.enum(["BOOL", "NUM", "TEXT"]).optional(),
-        required: z.boolean().optional(),
-        help_text: z.string().optional(),
-        sort_order: z.number().optional(),
-      })
-    )
-    .mutation(async ({ input }) => {
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string; label?: string; field_type?: string; required?: boolean; help_text?: string; sort_order?: number }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID item requis" });
+      }
       const updates: string[] = [];
       const params: any[] = [];
       let idx = 1;
 
-      if (input.label) {
+      if (data.label) {
         updates.push(`label = $${idx++}`);
-        params.push(input.label);
+        params.push(data.label);
       }
-      if (input.field_type) {
+      if (data.field_type) {
         updates.push(`field_type = $${idx++}`);
-        params.push(input.field_type);
+        params.push(data.field_type);
       }
-      if (input.required !== undefined) {
+      if (data.required !== undefined) {
         updates.push(`required = $${idx++}`);
-        params.push(input.required);
+        params.push(data.required);
       }
-      if (input.help_text !== undefined) {
+      if (data.help_text !== undefined) {
         updates.push(`help_text = $${idx++}`);
-        params.push(input.help_text);
+        params.push(data.help_text);
       }
-      if (input.sort_order !== undefined) {
+      if (data.sort_order !== undefined) {
         updates.push(`sort_order = $${idx++}`);
-        params.push(input.sort_order);
+        params.push(data.sort_order);
       }
 
       if (updates.length === 0) return null;
 
-      params.push(input.id);
+      params.push(data.id);
       await pgQuery(`UPDATE checklist_items SET ${updates.join(", ")} WHERE id = $${idx}`, params);
 
-      const items = await pgQuery<any>("SELECT * FROM checklist_items WHERE id = $1", [input.id]);
+      const items = await pgQuery<any>("SELECT * FROM checklist_items WHERE id = $1", [data.id]);
       return items[0] || null;
     }),
 
   deleteChecklistItem: adminProcedure
-    .input(z.object({ id: z.string() }))
-    .mutation(async ({ input }) => {
-      await pgQuery("DELETE FROM checklist_items WHERE id = $1", [input.id]);
+    .input(z.any())
+    .mutation(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID item requis" });
+      }
+      await pgQuery("DELETE FROM checklist_items WHERE id = $1", [data.id]);
       return { success: true };
     }),
 });

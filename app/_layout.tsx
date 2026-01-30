@@ -84,6 +84,18 @@ function RootLayoutNav() {
         name="maintenance/add"
         options={{ title: "Ajouter maintenance", presentation: "modal" }}
       />
+      <Stack.Screen
+        name="profile"
+        options={{ title: "Mon profil" }}
+      />
+      <Stack.Screen
+        name="reset-password"
+        options={{ title: "Nouveau mot de passe", headerShown: false }}
+      />
+      <Stack.Screen
+        name="client/[id]"
+        options={{ title: "Profil Client" }}
+      />
     </Stack>
   );
 }

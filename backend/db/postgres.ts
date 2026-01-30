@@ -61,6 +61,17 @@ export async function ensurePgSchema(): Promise<void> {
     CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
+      siret TEXT,
+      tva_number TEXT,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      address TEXT,
+      access_instructions TEXT,
+      billing_address TEXT,
+      billing_email TEXT,
+      internal_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE',
       created_at TIMESTAMPTZ NOT NULL
     );
 
@@ -266,6 +277,19 @@ export async function ensurePgSchema(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_attachments_category ON attachments(category);
     CREATE INDEX IF NOT EXISTS idx_attachments_status ON attachments(status);
     CREATE INDEX IF NOT EXISTS idx_attachments_parent ON attachments(parent_id);
+
+    -- =============================================
+    -- PASSWORD RESET TOKENS TABLE
+    -- =============================================
+    CREATE TABLE IF NOT EXISTS password_reset_tokens (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT UNIQUE NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_token ON password_reset_tokens(token);
+    CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires ON password_reset_tokens(expires_at);
   `;
 
   console.log("[PG] Ensuring schema...");
@@ -274,5 +298,17 @@ export async function ensurePgSchema(): Promise<void> {
   await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;`);
   await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS must_change_password BOOLEAN NOT NULL DEFAULT FALSE;`);
   await p.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_updated_at TIMESTAMPTZ;`);
+  // Ensure new client columns exist for existing databases
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS siret TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS tva_number TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_name TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_email TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS contact_phone TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS access_instructions TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_address TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS billing_email TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS internal_notes TEXT;`);
+  await p.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'ACTIVE';`);
   console.log("[PG] Schema ready");
 }

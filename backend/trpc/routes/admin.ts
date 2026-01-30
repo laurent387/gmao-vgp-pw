@@ -137,10 +137,70 @@ export const adminRouter = createTRPCRouter({
   // ============ CLIENTS ============
   listClients: adminProcedure.query(async () => {
     const clients = await pgQuery<any>(
-      "SELECT id, name, created_at FROM clients ORDER BY name"
+      `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
+              address, access_instructions, billing_address, billing_email, internal_notes, 
+              status, created_at 
+       FROM clients ORDER BY name`
     );
     return clients;
   }),
+
+  getClient: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const clients = await pgQuery<any>(
+        `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
+                address, access_instructions, billing_address, billing_email, internal_notes, 
+                status, created_at 
+         FROM clients WHERE id = $1`,
+        [input.id]
+      );
+      return clients[0] || null;
+    }),
+
+  getClientStats: protectedProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      // Get site count
+      const siteCountResult = await pgQuery<{ count: string }>(
+        "SELECT COUNT(*) as count FROM sites WHERE client_id = $1",
+        [input.id]
+      );
+      const site_count = parseInt(siteCountResult[0]?.count || '0', 10);
+
+      // Get asset count (assets in sites belonging to this client)
+      const assetCountResult = await pgQuery<{ count: string }>(
+        `SELECT COUNT(*) as count FROM assets a 
+         JOIN sites s ON a.site_id = s.id 
+         WHERE s.client_id = $1`,
+        [input.id]
+      );
+      const asset_count = parseInt(assetCountResult[0]?.count || '0', 10);
+
+      // Get last report date
+      const lastReportResult = await pgQuery<{ performed_at: string }>(
+        `SELECT r.performed_at FROM reports r
+         JOIN assets a ON r.asset_id = a.id
+         JOIN sites s ON a.site_id = s.id
+         WHERE s.client_id = $1
+         ORDER BY r.performed_at DESC LIMIT 1`,
+        [input.id]
+      );
+      const last_report_date = lastReportResult[0]?.performed_at || null;
+
+      // Get next due date from asset_controls
+      const nextDueResult = await pgQuery<{ next_due_at: string }>(
+        `SELECT ac.next_due_at FROM asset_controls ac
+         JOIN assets a ON ac.asset_id = a.id
+         JOIN sites s ON a.site_id = s.id
+         WHERE s.client_id = $1 AND ac.next_due_at IS NOT NULL
+         ORDER BY ac.next_due_at ASC LIMIT 1`,
+        [input.id]
+      );
+      const next_due_date = nextDueResult[0]?.next_due_at || null;
+
+      return { site_count, asset_count, last_report_date, next_due_date };
+    }),
 
   createClient: adminProcedure
     .input(z.object({ name: z.string().min(1) }))
@@ -148,17 +208,73 @@ export const adminRouter = createTRPCRouter({
       const id = generateId();
       const now = isoNow();
       await pgQuery(
-        "INSERT INTO clients (id, name, created_at) VALUES ($1, $2, $3)",
+        "INSERT INTO clients (id, name, status, created_at) VALUES ($1, $2, 'ACTIVE', $3)",
         [id, input.name, now]
       );
-      return { id, name: input.name, created_at: now };
+      return { id, name: input.name, status: 'ACTIVE', created_at: now };
     }),
 
   updateClient: adminProcedure
     .input(z.object({ id: z.string(), name: z.string().min(1) }))
     .mutation(async ({ input }) => {
       await pgQuery("UPDATE clients SET name = $1 WHERE id = $2", [input.name, input.id]);
-      const clients = await pgQuery<any>("SELECT id, name, created_at FROM clients WHERE id = $1", [input.id]);
+      const clients = await pgQuery<any>(
+        `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
+                address, access_instructions, billing_address, billing_email, internal_notes, 
+                status, created_at 
+         FROM clients WHERE id = $1`,
+        [input.id]
+      );
+      return clients[0] || null;
+    }),
+
+  updateClientFull: adminProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1).optional(),
+        siret: z.string().optional().nullable(),
+        tva_number: z.string().optional().nullable(),
+        contact_name: z.string().optional().nullable(),
+        contact_email: z.string().optional().nullable(),
+        contact_phone: z.string().optional().nullable(),
+        address: z.string().optional().nullable(),
+        access_instructions: z.string().optional().nullable(),
+        billing_address: z.string().optional().nullable(),
+        billing_email: z.string().optional().nullable(),
+        internal_notes: z.string().optional().nullable(),
+        status: z.enum(['ACTIVE', 'INACTIVE', 'PROSPECT', 'SUSPENDED']).optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const updates: string[] = [];
+      const params: any[] = [];
+      let idx = 1;
+
+      const fields = [
+        'name', 'siret', 'tva_number', 'contact_name', 'contact_email', 'contact_phone',
+        'address', 'access_instructions', 'billing_address', 'billing_email', 'internal_notes', 'status'
+      ];
+
+      for (const field of fields) {
+        if ((input as any)[field] !== undefined) {
+          updates.push(`${field} = $${idx++}`);
+          params.push((input as any)[field]);
+        }
+      }
+
+      if (updates.length === 0) return null;
+
+      params.push(input.id);
+      await pgQuery(`UPDATE clients SET ${updates.join(", ")} WHERE id = $${idx}`, params);
+
+      const clients = await pgQuery<any>(
+        `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
+                address, access_instructions, billing_address, billing_email, internal_notes, 
+                status, created_at 
+         FROM clients WHERE id = $1`,
+        [input.id]
+      );
       return clients[0] || null;
     }),
 

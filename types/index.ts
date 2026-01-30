@@ -32,7 +32,23 @@ export interface User {
 export interface Client {
   id: string;
   name: string;
+  siret?: string | null;
+  tva_number?: string | null;
+  contact_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  address?: string | null;
+  access_instructions?: string | null;
+  billing_address?: string | null;
+  billing_email?: string | null;
+  internal_notes?: string | null;
+  status: 'ACTIVE' | 'INACTIVE' | 'PROSPECT' | 'SUSPENDED';
   created_at: string;
+  // Computed stats (optional, from getClientStats)
+  asset_count?: number;
+  site_count?: number;
+  last_report_date?: string | null;
+  next_due_date?: string | null;
 }
 
 export interface Site {

@@ -1,14 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, MapPin, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp, Building2, Wrench } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { Users, MapPin, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp, Building2, Wrench, Eye } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { SectionCard } from '@/components/Card';
 import { LoadingState } from '@/components/EmptyState';
+import { ClientSheet } from '@/components/ClientSheet';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
+import { Client as ClientType } from '@/types';
 
 type AdminTab = 'users' | 'clients' | 'sites' | 'assets';
 type UserRole = 'ADMIN' | 'HSE_MANAGER' | 'TECHNICIAN' | 'AUDITOR';
@@ -75,6 +78,7 @@ const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export default function AdminScreen() {
+  const router = useRouter();
   const { user, hasPermission } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<AdminTab>('users');
@@ -84,6 +88,7 @@ export default function AdminScreen() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
   const isAdmin = hasPermission(['ADMIN', 'HSE_MANAGER']);
+  const userRole = user?.role || 'TECHNICIAN';
 
   const { data: users, isLoading: loadingUsers, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(undefined, { enabled: isAdmin && activeTab === 'users' });
   const { data: clients, isLoading: loadingClients, refetch: refetchClients } = trpc.admin.listClients.useQuery(undefined, { enabled: isAdmin && (activeTab === 'clients' || activeTab === 'sites') });
@@ -326,11 +331,17 @@ export default function AdminScreen() {
             ))}
 
             {activeTab === 'clients' && clientsList.map((c: Client) => (
-              <View key={c.id} style={styles.listItem}>
-                <View style={styles.listItemContent}>
-                  <Text style={styles.listItemTitle}>{c.name}</Text>
-                </View>
-                <View style={styles.listItemActions}>
+              <View key={c.id} style={styles.clientCardWrapper}>
+                <ClientSheet
+                  client={c as unknown as ClientType}
+                  userRole={userRole}
+                  variant="compact"
+                  onPress={() => router.push(`/client/${c.id}`)}
+                />
+                <View style={styles.clientActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/client/${c.id}`)}>
+                    <Eye size={16} color={colors.primary} />
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(c)}>
                     <Pencil size={16} color={colors.primary} />
                   </TouchableOpacity>
@@ -850,6 +861,17 @@ const styles = StyleSheet.create({
   accessDeniedText: {
     ...typography.body,
     color: colors.textMuted,
+  },
+  clientCardWrapper: {
+    position: 'relative',
+    marginBottom: spacing.sm,
+  },
+  clientActions: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.xs,
   },
 });
 

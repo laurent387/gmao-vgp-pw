@@ -38,9 +38,12 @@ export const adminRouter = createTRPCRouter({
   createUser: adminProcedure
     .input(z.any())
     .mutation(async ({ input, ctx }) => {
+      console.log("[ADMIN] createUser raw input:", JSON.stringify(input));
       const data = unwrapInput<{ email: string; name: string; role: string; sendPasswordEmail?: boolean }>(input, ctx);
+      console.log("[ADMIN] createUser unwrapped data:", JSON.stringify(data));
       
       if (!data.email || !data.name || !data.role) {
+        console.log("[ADMIN] createUser validation failed - missing fields");
         throw new TRPCError({ code: "BAD_REQUEST", message: "Email, nom et rôle requis" });
       }
 

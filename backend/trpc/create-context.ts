@@ -110,6 +110,8 @@ export const mutationProcedure = t.procedure.use(async ({ ctx, next }) => {
 });
 
 export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
+  console.log("[ADMIN_PROC] token:", ctx.token?.substring(0, 30), "user:", ctx.user?.email, "role:", ctx.user?.role);
+  
   if (!ctx.token) {
     throw new TRPCError({
       code: "UNAUTHORIZED",
@@ -118,6 +120,7 @@ export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
   }
 
   if (!ctx.user || !['ADMIN', 'HSE_MANAGER'].includes(ctx.user.role)) {
+    console.log("[ADMIN_PROC] Access denied - user role:", ctx.user?.role);
     throw new TRPCError({
       code: "FORBIDDEN",
       message: "Accès réservé aux administrateurs",

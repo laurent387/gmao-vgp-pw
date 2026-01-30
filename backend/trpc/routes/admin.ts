@@ -1,5 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { randomBytes } from "crypto";
 
 import { createTRPCRouter, protectedProcedure, adminProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
@@ -153,42 +154,46 @@ export const adminRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Utilisateur non trouvé" });
       }
 
-      // Generate new temporary password
-      const tempPassword = generateTempPassword();
-      const passwordHash = hashPassword(tempPassword);
+      // Generate secure token
+      const token = randomBytes(32).toString("hex");
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
-      // Update user password and set must_change_password flag
+      // Store token in database
       await pgQuery(
-        "UPDATE users SET password_hash = $1, must_change_password = TRUE, password_updated_at = NOW() WHERE id = $2",
-        [passwordHash, user.id]
+        `INSERT INTO password_reset_tokens (user_id, token, expires_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (user_id) DO UPDATE SET token = $2, expires_at = $3, created_at = NOW()`,
+        [user.id, token, expiresAt]
       );
 
-      // Send email with new password
-      try {
-        await sendEmail({
-          to: user.email,
-          subject: "Nouveau mot de passe - In-Spectra",
-          text: `Bonjour ${user.name},\n\nUn nouveau mot de passe temporaire a été généré pour votre compte In-Spectra.\n\nMot de passe temporaire : ${tempPassword}\n\nMerci de changer ce mot de passe dès votre première connexion.\n\nCordialement,\nL'équipe In-Spectra`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #3B82F6;">Nouveau mot de passe</h2>
-              <p>Bonjour <strong>${user.name}</strong>,</p>
-              <p>Un nouveau mot de passe temporaire a été généré pour votre compte In-Spectra.</p>
-              <p style="background-color: #f3f4f6; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 18px; text-align: center;">
-                <strong>${tempPassword}</strong>
-              </p>
-              <p style="color: #ef4444; font-weight: bold;">⚠️ Merci de changer ce mot de passe dès votre première connexion.</p>
-              <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-              <p style="color: #999; font-size: 12px;">L'équipe In-Spectra</p>
-            </div>
-          `,
-        });
-        console.log("[ADMIN] Password reset email sent to:", user.email);
-        return { success: true, emailSent: true };
-      } catch (error: any) {
-        console.error("[ADMIN] Failed to send password reset email:", error?.message || error);
-        return { success: true, emailSent: false };
-      }
+      // Generate reset link
+      const frontendUrl = process.env.FRONTEND_URL || "https://app.in-spectra.com";
+      const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+      // Send email with reset link
+      await sendEmail({
+        to: user.email,
+        subject: "Réinitialisation de votre mot de passe - In-Spectra",
+        text: `Bonjour ${user.name},\n\nUn administrateur a demandé la réinitialisation de votre mot de passe.\n\nCliquez sur le lien suivant pour définir un nouveau mot de passe :\n${resetLink}\n\nCe lien expire dans 1 heure.\n\nCordialement,\nL'équipe In-Spectra`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #3B82F6;">Réinitialisation de mot de passe</h2>
+            <p>Bonjour <strong>${user.name}</strong>,</p>
+            <p>Un administrateur a demandé la réinitialisation de votre mot de passe.</p>
+            <p style="margin: 20px 0;">
+              <a href="${resetLink}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                Réinitialiser mon mot de passe
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Ce lien expire dans 1 heure.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #999; font-size: 12px;">L'équipe In-Spectra</p>
+          </div>
+        `,
+      });
+
+      console.log("[ADMIN] Password reset link sent to:", user.email);
+      return { success: true };
     }),
 
   sendTestEmail: adminProcedure

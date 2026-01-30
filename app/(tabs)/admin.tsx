@@ -135,12 +135,8 @@ export default function AdminScreen() {
   });
 
   const sendPasswordResetMutation = trpc.admin.sendPasswordResetToUser.useMutation({
-    onSuccess: (data) => {
-      if (data.emailSent) {
-        Alert.alert('Succès', 'Un nouveau mot de passe a été envoyé par email');
-      } else {
-        Alert.alert('Attention', 'Le mot de passe a été réinitialisé mais l\'email n\'a pas pu être envoyé');
-      }
+    onSuccess: () => {
+      Alert.alert('Succès', 'Un lien de réinitialisation a été envoyé par email');
     },
     onError: (e) => Alert.alert('Erreur', e.message),
   });

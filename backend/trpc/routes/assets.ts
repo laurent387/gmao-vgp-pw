@@ -386,6 +386,13 @@ export const assetsRouter = createTRPCRouter({
       return assets[0] || null;
     }),
 
+  delete: mutationProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      await pgQuery("DELETE FROM assets WHERE id = $1", [input.id]);
+      return { success: true };
+    }),
+
   categories: publicProcedure.query(async () => {
     const result = await pgQuery<{ categorie: string }>(
       "SELECT DISTINCT categorie FROM assets ORDER BY categorie"

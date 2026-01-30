@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, RefreshControl } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, MapPin, Layers, ClipboardList, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp } from 'lucide-react-native';
+import { Users, MapPin, Plus, Pencil, Trash2, X, Check, ChevronDown, ChevronUp, Building2, Wrench } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
@@ -10,7 +10,7 @@ import { LoadingState } from '@/components/EmptyState';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
 
-type AdminTab = 'users' | 'sites' | 'zones' | 'controls';
+type AdminTab = 'users' | 'clients' | 'sites' | 'assets';
 type UserRole = 'ADMIN' | 'HSE_MANAGER' | 'TECHNICIAN' | 'AUDITOR';
 
 interface User {
@@ -18,6 +18,12 @@ interface User {
   email: string;
   name: string;
   role: UserRole;
+  created_at: string;
+}
+
+interface Client {
+  id: string;
+  name: string;
   created_at: string;
 }
 
@@ -36,13 +42,23 @@ interface Zone {
   site_name?: string;
 }
 
-interface ControlType {
+interface Asset {
   id: string;
-  code: string;
-  label: string;
-  description: string | null;
-  periodicity_days: number;
-  active: boolean;
+  code_interne: string;
+  designation: string;
+  categorie: string;
+  marque: string;
+  modele: string;
+  numero_serie: string;
+  annee: number;
+  vgp_enabled?: boolean;
+  vgp_validity_months?: number | null;
+  statut: string;
+  criticite: number;
+  site_id: string;
+  zone_id: string;
+  site_name?: string;
+  zone_name?: string;
 }
 
 function normalizeList<T>(value: any): T[] {
@@ -70,14 +86,16 @@ export default function AdminScreen() {
   const isAdmin = hasPermission(['ADMIN', 'HSE_MANAGER']);
 
   const { data: users, isLoading: loadingUsers, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(undefined, { enabled: isAdmin && activeTab === 'users' });
-  const { data: sites, isLoading: loadingSites, refetch: refetchSites } = trpc.admin.listSites.useQuery(undefined, { enabled: isAdmin && activeTab === 'sites' });
-  const { data: zones, isLoading: loadingZones, refetch: refetchZones } = trpc.admin.listZones.useQuery(undefined, { enabled: isAdmin && activeTab === 'zones' });
-  const { data: controlTypes, isLoading: loadingControls, refetch: refetchControls } = trpc.admin.listControlTypes.useQuery(undefined, { enabled: isAdmin && activeTab === 'controls' });
+  const { data: clients, isLoading: loadingClients, refetch: refetchClients } = trpc.admin.listClients.useQuery(undefined, { enabled: isAdmin && (activeTab === 'clients' || activeTab === 'sites') });
+  const { data: sites, isLoading: loadingSites, refetch: refetchSites } = trpc.admin.listSites.useQuery(undefined, { enabled: isAdmin && (activeTab === 'sites' || activeTab === 'assets') });
+  const { data: zones, isLoading: loadingZones, refetch: refetchZones } = trpc.admin.listZones.useQuery(undefined, { enabled: isAdmin && activeTab === 'assets' });
+  const { data: assets, isLoading: loadingAssets, refetch: refetchAssets } = trpc.assets.list.useQuery(undefined, { enabled: isAdmin && activeTab === 'assets' });
 
   const usersList = React.useMemo(() => normalizeList<User>(users), [users]);
+  const clientsList = React.useMemo(() => normalizeList<Client>(clients), [clients]);
   const sitesList = React.useMemo(() => normalizeList<Site>(sites), [sites]);
   const zonesList = React.useMemo(() => normalizeList<Zone>(zones), [zones]);
-  const controlTypesList = React.useMemo(() => normalizeList<ControlType>(controlTypes), [controlTypes]);
+  const assetsList = React.useMemo(() => normalizeList<Asset>(assets), [assets]);
 
   const createUserMutation = trpc.admin.createUser.useMutation({
     onSuccess: (result) => {
@@ -111,6 +129,32 @@ export default function AdminScreen() {
     onError: (e) => Alert.alert('Erreur', e.message),
   });
 
+  const createClientMutation = trpc.admin.createClient.useMutation({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [['admin', 'listClients']] });
+      setModalVisible(false);
+      Alert.alert('Succès', 'Client créé');
+    },
+    onError: (e) => Alert.alert('Erreur', e.message),
+  });
+
+  const updateClientMutation = trpc.admin.updateClient.useMutation({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [['admin', 'listClients']] });
+      setModalVisible(false);
+      Alert.alert('Succès', 'Client modifié');
+    },
+    onError: (e) => Alert.alert('Erreur', e.message),
+  });
+
+  const deleteClientMutation = trpc.admin.deleteClient.useMutation({
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [['admin', 'listClients']] });
+      Alert.alert('Succès', 'Client supprimé');
+    },
+    onError: (e) => Alert.alert('Erreur', e.message),
+  });
+
   const createSiteMutation = trpc.admin.createSite.useMutation({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [['admin', 'listSites']] });
@@ -137,37 +181,28 @@ export default function AdminScreen() {
     onError: (e) => Alert.alert('Erreur', e.message),
   });
 
-  const createZoneMutation = trpc.admin.createZone.useMutation({
+  const createAssetMutation = trpc.assets.create.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['admin', 'listZones']] });
+      queryClient.invalidateQueries({ queryKey: [['assets', 'list']] });
       setModalVisible(false);
-      Alert.alert('Succès', 'Zone créée');
+      Alert.alert('Succès', 'Équipement créé');
     },
     onError: (e) => Alert.alert('Erreur', e.message),
   });
 
-  const deleteZoneMutation = trpc.admin.deleteZone.useMutation({
+  const updateAssetMutation = trpc.assets.update.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['admin', 'listZones']] });
-      Alert.alert('Succès', 'Zone supprimée');
+      queryClient.invalidateQueries({ queryKey: [['assets', 'list']] });
+      setModalVisible(false);
+      Alert.alert('Succès', 'Équipement modifié');
     },
     onError: (e) => Alert.alert('Erreur', e.message),
   });
 
-  const createControlTypeMutation = trpc.admin.createControlType.useMutation({
+  const deleteAssetMutation = trpc.assets.delete.useMutation({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['admin', 'listControlTypes']] });
-      setModalVisible(false);
-      Alert.alert('Succès', 'Type de contrôle créé');
-    },
-    onError: (e) => Alert.alert('Erreur', e.message),
-  });
-
-  const updateControlTypeMutation = trpc.admin.updateControlType.useMutation({
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['admin', 'listControlTypes']] });
-      setModalVisible(false);
-      Alert.alert('Succès', 'Type de contrôle modifié');
+      queryClient.invalidateQueries({ queryKey: [['assets', 'list']] });
+      Alert.alert('Succès', 'Équipement supprimé');
     },
     onError: (e) => Alert.alert('Erreur', e.message),
   });
@@ -175,11 +210,14 @@ export default function AdminScreen() {
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (activeTab === 'users') await refetchUsers();
+    if (activeTab === 'clients') await refetchClients();
     if (activeTab === 'sites') await refetchSites();
-    if (activeTab === 'zones') await refetchZones();
-    if (activeTab === 'controls') await refetchControls();
+    if (activeTab === 'assets') {
+      await refetchAssets();
+      await refetchZones();
+    }
     setRefreshing(false);
-  }, [activeTab, refetchUsers, refetchSites, refetchZones, refetchControls]);
+  }, [activeTab, refetchUsers, refetchClients, refetchSites, refetchAssets, refetchZones]);
 
   const openCreateModal = () => {
     setEditingItem(null);
@@ -202,8 +240,9 @@ export default function AdminScreen() {
           style: 'destructive',
           onPress: () => {
             if (type === 'user') deleteUserMutation.mutate({ id });
+            if (type === 'client') deleteClientMutation.mutate({ id });
             if (type === 'site') deleteSiteMutation.mutate({ id });
-            if (type === 'zone') deleteZoneMutation.mutate({ id });
+            if (type === 'asset') deleteAssetMutation.mutate({ id });
           },
         },
       ]
@@ -222,12 +261,16 @@ export default function AdminScreen() {
 
   const tabs: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
     { key: 'users', label: 'Utilisateurs', icon: <Users size={18} color={activeTab === 'users' ? colors.primary : colors.textMuted} /> },
+    { key: 'clients', label: 'Clients', icon: <Building2 size={18} color={activeTab === 'clients' ? colors.primary : colors.textMuted} /> },
     { key: 'sites', label: 'Sites', icon: <MapPin size={18} color={activeTab === 'sites' ? colors.primary : colors.textMuted} /> },
-    { key: 'zones', label: 'Zones', icon: <Layers size={18} color={activeTab === 'zones' ? colors.primary : colors.textMuted} /> },
-    { key: 'controls', label: 'Contrôles', icon: <ClipboardList size={18} color={activeTab === 'controls' ? colors.primary : colors.textMuted} /> },
+    { key: 'assets', label: 'Équipements', icon: <Wrench size={18} color={activeTab === 'assets' ? colors.primary : colors.textMuted} /> },
   ];
 
-  const isLoading = (activeTab === 'users' && loadingUsers) || (activeTab === 'sites' && loadingSites) || (activeTab === 'zones' && loadingZones) || (activeTab === 'controls' && loadingControls);
+  const isLoading =
+    (activeTab === 'users' && loadingUsers) ||
+    (activeTab === 'clients' && loadingClients) ||
+    (activeTab === 'sites' && loadingSites) ||
+    (activeTab === 'assets' && (loadingAssets || loadingZones));
 
   return (
     <View style={styles.container}>
@@ -251,9 +294,9 @@ export default function AdminScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>
             {activeTab === 'users' && 'Gestion des utilisateurs'}
+            {activeTab === 'clients' && 'Gestion des clients'}
             {activeTab === 'sites' && 'Gestion des sites'}
-            {activeTab === 'zones' && 'Gestion des zones'}
-            {activeTab === 'controls' && 'Types de contrôles'}
+            {activeTab === 'assets' && 'Gestion des équipements'}
           </Text>
           <Button title="Ajouter" onPress={openCreateModal} size="sm" icon={<Plus size={16} color={colors.textInverse} />} />
         </View>
@@ -282,11 +325,32 @@ export default function AdminScreen() {
               </View>
             ))}
 
+            {activeTab === 'clients' && clientsList.map((c: Client) => (
+              <View key={c.id} style={styles.listItem}>
+                <View style={styles.listItemContent}>
+                  <Text style={styles.listItemTitle}>{c.name}</Text>
+                </View>
+                <View style={styles.listItemActions}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(c)}>
+                    <Pencil size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDelete('client', c.id, c.name)}>
+                    <Trash2 size={16} color={colors.danger} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+
             {activeTab === 'sites' && sitesList.map((s: Site) => (
               <View key={s.id} style={styles.listItem}>
                 <View style={styles.listItemContent}>
                   <Text style={styles.listItemTitle}>{s.name}</Text>
                   {s.address && <Text style={styles.listItemSubtitle}>{s.address}</Text>}
+                  {!!s.client_id && (
+                    <Text style={styles.listItemSubtitle}>
+                      Client: {clientsList.find((c) => c.id === s.client_id)?.name || 'Non défini'}
+                    </Text>
+                  )}
                 </View>
                 <View style={styles.listItemActions}>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(s)}>
@@ -299,30 +363,21 @@ export default function AdminScreen() {
               </View>
             ))}
 
-            {activeTab === 'zones' && zonesList.map((z: Zone) => (
-              <View key={z.id} style={styles.listItem}>
+            {activeTab === 'assets' && assetsList.map((a: Asset) => (
+              <View key={a.id} style={styles.listItem}>
                 <View style={styles.listItemContent}>
-                  <Text style={styles.listItemTitle}>{z.name}</Text>
-                  <Text style={styles.listItemSubtitle}>{z.site_name || 'Site inconnu'}</Text>
+                  <Text style={styles.listItemTitle}>{a.code_interne} • {a.designation}</Text>
+                  <Text style={styles.listItemSubtitle}>{a.categorie}</Text>
+                  <Text style={styles.listItemSubtitle}>
+                    {a.site_name || 'Site inconnu'} • {a.zone_name || 'Zone inconnue'}
+                  </Text>
                 </View>
                 <View style={styles.listItemActions}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDelete('zone', z.id, z.name)}>
-                    <Trash2 size={16} color={colors.danger} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-
-            {activeTab === 'controls' && controlTypesList.map((ct: ControlType) => (
-              <View key={ct.id} style={[styles.listItem, !ct.active && styles.listItemInactive]}>
-                <View style={styles.listItemContent}>
-                  <Text style={styles.listItemTitle}>{ct.label}</Text>
-                  <Text style={styles.listItemSubtitle}>Code: {ct.code} • Périodicité: {ct.periodicity_days} jours</Text>
-                  {ct.description && <Text style={styles.listItemDesc}>{ct.description}</Text>}
-                </View>
-                <View style={styles.listItemActions}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(ct)}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(a)}>
                     <Pencil size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => confirmDelete('asset', a.id, a.code_interne)}>
+                    <Trash2 size={16} color={colors.danger} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -336,12 +391,23 @@ export default function AdminScreen() {
         onClose={() => setModalVisible(false)}
         type={activeTab}
         editingItem={editingItem}
+        clients={clientsList}
         sites={sitesList}
+        zones={zonesList}
         onSaveUser={(data) => editingItem ? updateUserMutation.mutate({ id: editingItem.id, ...data }) : createUserMutation.mutate(data as any)}
+        onSaveClient={(data) => editingItem ? updateClientMutation.mutate({ id: editingItem.id, ...data }) : createClientMutation.mutate(data as any)}
         onSaveSite={(data) => editingItem ? updateSiteMutation.mutate({ id: editingItem.id, ...data }) : createSiteMutation.mutate(data as any)}
-        onSaveZone={(data) => createZoneMutation.mutate(data as any)}
-        onSaveControlType={(data) => editingItem ? updateControlTypeMutation.mutate({ id: editingItem.id, ...data }) : createControlTypeMutation.mutate(data as any)}
-        isSaving={createUserMutation.isPending || updateUserMutation.isPending || createSiteMutation.isPending || updateSiteMutation.isPending || createZoneMutation.isPending || createControlTypeMutation.isPending || updateControlTypeMutation.isPending}
+        onSaveAsset={(data) => editingItem ? updateAssetMutation.mutate({ id: editingItem.id, data }) : createAssetMutation.mutate(data as any)}
+        isSaving={
+          createUserMutation.isPending ||
+          updateUserMutation.isPending ||
+          createClientMutation.isPending ||
+          updateClientMutation.isPending ||
+          createSiteMutation.isPending ||
+          updateSiteMutation.isPending ||
+          createAssetMutation.isPending ||
+          updateAssetMutation.isPending
+        }
       />
     </View>
   );
@@ -362,49 +428,93 @@ interface AdminModalProps {
   onClose: () => void;
   type: AdminTab;
   editingItem: any;
+  clients: Client[];
   sites: Site[];
+  zones: Zone[];
   onSaveUser: (data: any) => void;
+  onSaveClient: (data: any) => void;
   onSaveSite: (data: any) => void;
-  onSaveZone: (data: any) => void;
-  onSaveControlType: (data: any) => void;
+  onSaveAsset: (data: any) => void;
   isSaving: boolean;
 }
 
-function AdminModal({ visible, onClose, type, editingItem, sites, onSaveUser, onSaveSite, onSaveZone, onSaveControlType, isSaving }: AdminModalProps) {
+function AdminModal({ visible, onClose, type, editingItem, clients, sites, zones, onSaveUser, onSaveClient, onSaveSite, onSaveAsset, isSaving }: AdminModalProps) {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('TECHNICIAN');
   const [address, setAddress] = useState('');
+  const [clientId, setClientId] = useState('');
   const [siteId, setSiteId] = useState('');
-  const [code, setCode] = useState('');
-  const [description, setDescription] = useState('');
-  const [periodicityDays, setPeriodicityDays] = useState('365');
+  const [zoneId, setZoneId] = useState('');
+  const [codeInterne, setCodeInterne] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [categorie, setCategorie] = useState('');
+  const [marque, setMarque] = useState('');
+  const [modele, setModele] = useState('');
+  const [numeroSerie, setNumeroSerie] = useState('');
+  const [annee, setAnnee] = useState('2024');
+  const [statut, setStatut] = useState<'EN_SERVICE' | 'HORS_SERVICE' | 'REBUT' | 'EN_LOCATION'>('EN_SERVICE');
+  const [criticite, setCriticite] = useState('3');
+  const [vgpEnabled, setVgpEnabled] = useState(false);
+  const [vgpValidity, setVgpValidity] = useState('12');
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [showSitePicker, setShowSitePicker] = useState(false);
+  const [showClientPicker, setShowClientPicker] = useState(false);
+  const [showZonePicker, setShowZonePicker] = useState(false);
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
+
+  React.useEffect(() => {
+    if (type === 'assets' && siteId) {
+      const matchingZones = zones.filter((z) => z.site_id === siteId);
+      if (!matchingZones.find((z) => z.id === zoneId)) {
+        setZoneId(matchingZones[0]?.id || '');
+      }
+    }
+  }, [siteId, zones, zoneId, type]);
 
   React.useEffect(() => {
     if (visible) {
       if (editingItem) {
-        setName(editingItem.name || editingItem.label || '');
+        setName(editingItem.name || '');
         setEmail(editingItem.email || '');
         setRole(editingItem.role || 'TECHNICIAN');
         setAddress(editingItem.address || '');
+        setClientId(editingItem.client_id || '');
         setSiteId(editingItem.site_id || '');
-        setCode(editingItem.code || '');
-        setDescription(editingItem.description || '');
-        setPeriodicityDays(String(editingItem.periodicity_days || 365));
+        setZoneId(editingItem.zone_id || '');
+        setCodeInterne(editingItem.code_interne || '');
+        setDesignation(editingItem.designation || '');
+        setCategorie(editingItem.categorie || '');
+        setMarque(editingItem.marque || '');
+        setModele(editingItem.modele || '');
+        setNumeroSerie(editingItem.numero_serie || '');
+        setAnnee(String(editingItem.annee || 2024));
+        setStatut(editingItem.statut || 'EN_SERVICE');
+        setCriticite(String(editingItem.criticite || 3));
+        setVgpEnabled(Boolean(editingItem.vgp_enabled));
+        setVgpValidity(String(editingItem.vgp_validity_months || 12));
       } else {
         setName('');
         setEmail('');
         setRole('TECHNICIAN');
         setAddress('');
+        setClientId(clients[0]?.id || '');
         setSiteId(sites[0]?.id || '');
-        setCode('');
-        setDescription('');
-        setPeriodicityDays('365');
+        setZoneId(zones[0]?.id || '');
+        setCodeInterne('');
+        setDesignation('');
+        setCategorie('');
+        setMarque('');
+        setModele('');
+        setNumeroSerie('');
+        setAnnee('2024');
+        setStatut('EN_SERVICE');
+        setCriticite('3');
+        setVgpEnabled(false);
+        setVgpValidity('12');
       }
     }
-  }, [visible, editingItem, sites]);
+  }, [visible, editingItem, sites, zones, clients]);
 
   const handleSave = () => {
     if (type === 'users') {
@@ -413,28 +523,56 @@ function AdminModal({ visible, onClose, type, editingItem, sites, onSaveUser, on
         return;
       }
       onSaveUser({ name, email, role });
+    } else if (type === 'clients') {
+      if (!name) {
+        Alert.alert('Erreur', 'Nom requis');
+        return;
+      }
+      onSaveClient({ name });
     } else if (type === 'sites') {
       if (!name) {
         Alert.alert('Erreur', 'Nom requis');
         return;
       }
-      onSaveSite({ name, address: address || undefined });
-    } else if (type === 'zones') {
-      if (!name || !siteId) {
-        Alert.alert('Erreur', 'Nom et site requis');
+      onSaveSite({ name, address: address || undefined, client_id: clientId || undefined });
+    } else if (type === 'assets') {
+      if (!siteId || !zoneId) {
+        Alert.alert('Erreur', 'Site et zone requis');
         return;
       }
-      onSaveZone({ name, site_id: siteId });
-    } else if (type === 'controls') {
-      if (!name || !code) {
-        Alert.alert('Erreur', 'Label et code requis');
+
+      if (editingItem) {
+        onSaveAsset({
+          designation,
+          statut,
+          criticite: parseInt(criticite, 10) || 3,
+          site_id: siteId,
+          zone_id: zoneId,
+          vgp_enabled: vgpEnabled,
+          vgp_validity_months: vgpEnabled ? (parseInt(vgpValidity, 10) || 12) : null,
+        });
         return;
       }
-      onSaveControlType({
-        label: name,
-        code,
-        description: description || undefined,
-        periodicity_days: parseInt(periodicityDays, 10) || 365,
+
+      if (!codeInterne || !designation || !categorie || !marque || !modele || !numeroSerie) {
+        Alert.alert('Erreur', 'Tous les champs obligatoires doivent être remplis');
+        return;
+      }
+
+      onSaveAsset({
+        code_interne: codeInterne,
+        designation,
+        categorie,
+        marque,
+        modele,
+        numero_serie: numeroSerie,
+        annee: parseInt(annee, 10) || 2024,
+        statut,
+        criticite: parseInt(criticite, 10) || 3,
+        site_id: siteId,
+        zone_id: zoneId,
+        vgp_enabled: vgpEnabled,
+        vgp_validity_months: vgpEnabled ? (parseInt(vgpValidity, 10) || 12) : null,
       });
     }
   };
@@ -443,9 +581,9 @@ function AdminModal({ visible, onClose, type, editingItem, sites, onSaveUser, on
     const action = editingItem ? 'Modifier' : 'Créer';
     switch (type) {
       case 'users': return `${action} un utilisateur`;
+      case 'clients': return `${action} un client`;
       case 'sites': return `${action} un site`;
-      case 'zones': return `${action} une zone`;
-      case 'controls': return `${action} un type de contrôle`;
+      case 'assets': return `${action} un équipement`;
       default: return action;
     }
   };
@@ -486,15 +624,66 @@ function AdminModal({ visible, onClose, type, editingItem, sites, onSaveUser, on
               </>
             )}
 
+            {type === 'clients' && (
+              <>
+                <Input label="Nom du client" value={name} onChangeText={setName} placeholder="Entreprise" />
+              </>
+            )}
+
             {type === 'sites' && (
               <>
+                <View style={modalStyles.field}>
+                  <Text style={modalStyles.label}>Client</Text>
+                  <TouchableOpacity style={modalStyles.picker} onPress={() => setShowClientPicker(!showClientPicker)}>
+                    <Text style={modalStyles.pickerText}>{clients.find(c => c.id === clientId)?.name || 'Sélectionner un client'}</Text>
+                    {showClientPicker ? <ChevronUp size={20} color={colors.textMuted} /> : <ChevronDown size={20} color={colors.textMuted} />}
+                  </TouchableOpacity>
+                  {showClientPicker && (
+                    <View style={modalStyles.pickerOptions}>
+                      {clients.map((c) => (
+                        <TouchableOpacity key={c.id} style={modalStyles.pickerOption} onPress={() => { setClientId(c.id); setShowClientPicker(false); }}>
+                          <Text style={[modalStyles.pickerOptionText, clientId === c.id && modalStyles.pickerOptionSelected]}>{c.name}</Text>
+                          {clientId === c.id && <Check size={16} color={colors.primary} />}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
                 <Input label="Nom" value={name} onChangeText={setName} placeholder="Nom du site" />
                 <Input label="Adresse" value={address} onChangeText={setAddress} placeholder="Adresse (optionnel)" multiline />
               </>
             )}
 
-            {type === 'zones' && (
+            {type === 'assets' && (
               <>
+                <Input label="Code interne" value={codeInterne} onChangeText={setCodeInterne} placeholder="EQ-0001" />
+                <Input label="Désignation" value={designation} onChangeText={setDesignation} placeholder="Désignation" />
+                <Input label="Catégorie" value={categorie} onChangeText={setCategorie} placeholder="Catégorie" />
+                <Input label="Marque" value={marque} onChangeText={setMarque} placeholder="Marque" />
+                <Input label="Modèle" value={modele} onChangeText={setModele} placeholder="Modèle" />
+                <Input label="N° Série" value={numeroSerie} onChangeText={setNumeroSerie} placeholder="Numéro de série" />
+                <Input label="Année" value={annee} onChangeText={setAnnee} placeholder="2024" keyboardType="numeric" />
+
+                <View style={modalStyles.field}>
+                  <Text style={modalStyles.label}>Statut</Text>
+                  <TouchableOpacity style={modalStyles.picker} onPress={() => setShowStatusPicker(!showStatusPicker)}>
+                    <Text style={modalStyles.pickerText}>{statut}</Text>
+                    {showStatusPicker ? <ChevronUp size={20} color={colors.textMuted} /> : <ChevronDown size={20} color={colors.textMuted} />}
+                  </TouchableOpacity>
+                  {showStatusPicker && (
+                    <View style={modalStyles.pickerOptions}>
+                      {['EN_SERVICE', 'HORS_SERVICE', 'REBUT', 'EN_LOCATION'].map((s) => (
+                        <TouchableOpacity key={s} style={modalStyles.pickerOption} onPress={() => { setStatut(s as any); setShowStatusPicker(false); }}>
+                          <Text style={[modalStyles.pickerOptionText, statut === s && modalStyles.pickerOptionSelected]}>{s}</Text>
+                          {statut === s && <Check size={16} color={colors.primary} />}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                </View>
+
+                <Input label="Criticité (1-5)" value={criticite} onChangeText={setCriticite} placeholder="3" keyboardType="numeric" />
+
                 <View style={modalStyles.field}>
                   <Text style={modalStyles.label}>Site</Text>
                   <TouchableOpacity style={modalStyles.picker} onPress={() => setShowSitePicker(!showSitePicker)}>
@@ -512,16 +701,37 @@ function AdminModal({ visible, onClose, type, editingItem, sites, onSaveUser, on
                     </View>
                   )}
                 </View>
-                <Input label="Nom de la zone" value={name} onChangeText={setName} placeholder="Nom de la zone" />
-              </>
-            )}
 
-            {type === 'controls' && (
-              <>
-                <Input label="Label" value={name} onChangeText={setName} placeholder="VGP Périodique" />
-                <Input label="Code" value={code} onChangeText={setCode} placeholder="VGP_PERIODIQUE" autoCapitalize="characters" />
-                <Input label="Description" value={description} onChangeText={setDescription} placeholder="Description (optionnel)" multiline />
-                <Input label="Périodicité (jours)" value={periodicityDays} onChangeText={setPeriodicityDays} placeholder="365" keyboardType="numeric" />
+                <View style={modalStyles.field}>
+                  <Text style={modalStyles.label}>Zone</Text>
+                  <TouchableOpacity style={modalStyles.picker} onPress={() => setShowZonePicker(!showZonePicker)}>
+                    <Text style={modalStyles.pickerText}>{zones.find(z => z.id === zoneId)?.name || 'Sélectionner une zone'}</Text>
+                    {showZonePicker ? <ChevronUp size={20} color={colors.textMuted} /> : <ChevronDown size={20} color={colors.textMuted} />}
+                  </TouchableOpacity>
+                  {showZonePicker && (
+                    <View style={modalStyles.pickerOptions}>
+                      {zones
+                        .filter((z) => !siteId || z.site_id === siteId)
+                        .map((z) => (
+                          <TouchableOpacity key={z.id} style={modalStyles.pickerOption} onPress={() => { setZoneId(z.id); setShowZonePicker(false); }}>
+                            <Text style={[modalStyles.pickerOptionText, zoneId === z.id && modalStyles.pickerOptionSelected]}>{z.name}</Text>
+                            {zoneId === z.id && <Check size={16} color={colors.primary} />}
+                          </TouchableOpacity>
+                        ))}
+                    </View>
+                  )}
+                </View>
+
+                <View style={modalStyles.field}>
+                  <Text style={modalStyles.label}>VGP activée</Text>
+                  <TouchableOpacity style={modalStyles.picker} onPress={() => setVgpEnabled(!vgpEnabled)}>
+                    <Text style={modalStyles.pickerText}>{vgpEnabled ? 'Oui' : 'Non'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {vgpEnabled && (
+                  <Input label="Validité VGP (mois)" value={vgpValidity} onChangeText={setVgpValidity} placeholder="12" keyboardType="numeric" />
+                )}
               </>
             )}
           </ScrollView>
@@ -543,26 +753,25 @@ const styles = StyleSheet.create({
   },
   tabs: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    gap: spacing.sm,
+    flexWrap: 'wrap',
   },
   tab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: spacing.xs,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surface,
   },
   tabActive: {
-    borderBottomColor: colors.primary,
+    backgroundColor: colors.primary + '15',
   },
   tabLabel: {
-    fontSize: typography.caption.fontSize,
-    fontWeight: '500' as const,
+    fontSize: typography.bodySmall.fontSize,
     color: colors.textMuted,
   },
   tabLabelActive: {

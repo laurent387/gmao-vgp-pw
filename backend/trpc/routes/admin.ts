@@ -133,6 +133,41 @@ export const adminRouter = createTRPCRouter({
         });
       }
     }),
+
+  // ============ CLIENTS ============
+  listClients: adminProcedure.query(async () => {
+    const clients = await pgQuery<any>(
+      "SELECT id, name, created_at FROM clients ORDER BY name"
+    );
+    return clients;
+  }),
+
+  createClient: adminProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const id = generateId();
+      const now = isoNow();
+      await pgQuery(
+        "INSERT INTO clients (id, name, created_at) VALUES ($1, $2, $3)",
+        [id, input.name, now]
+      );
+      return { id, name: input.name, created_at: now };
+    }),
+
+  updateClient: adminProcedure
+    .input(z.object({ id: z.string(), name: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      await pgQuery("UPDATE clients SET name = $1 WHERE id = $2", [input.name, input.id]);
+      const clients = await pgQuery<any>("SELECT id, name, created_at FROM clients WHERE id = $1", [input.id]);
+      return clients[0] || null;
+    }),
+
+  deleteClient: adminProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      await pgQuery("DELETE FROM clients WHERE id = $1", [input.id]);
+      return { success: true };
+    }),
   // ============ SITES ============
   listSites: protectedProcedure.query(async () => {
     const sites = await pgQuery<any>(
@@ -185,6 +220,7 @@ export const adminRouter = createTRPCRouter({
         id: z.string(),
         name: z.string().min(1).optional(),
         address: z.string().optional(),
+        client_id: z.string().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -199,6 +235,10 @@ export const adminRouter = createTRPCRouter({
       if (input.address !== undefined) {
         updates.push(`address = $${idx++}`);
         params.push(input.address);
+      }
+      if (input.client_id !== undefined) {
+        updates.push(`client_id = $${idx++}`);
+        params.push(input.client_id);
       }
 
       if (updates.length === 0) return null;

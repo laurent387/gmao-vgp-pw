@@ -239,9 +239,9 @@ export const authRouter = createTRPCRouter({
         [user.id, token, expiresAt]
       );
 
-      // Generate reset link
-      const baseUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL?.replace("/api", "") || "https://api.in-spectra.com";
-      const resetLink = `${baseUrl}/reset-password?token=${token}`;
+      // Generate reset link - use FRONTEND_URL for the web app
+      const frontendUrl = process.env.FRONTEND_URL || "https://app.in-spectra.com";
+      const resetLink = `${frontendUrl}/reset-password?token=${token}`;
 
       // Send email
       await sendEmail({

@@ -66,41 +66,46 @@ export const attachmentsRouter = createTRPCRouter({
       })
     )
     .query(async ({ input, ctx }) => {
-      console.log("[ATTACHMENTS] Listing attachments:", input);
+      try {
+        console.log("[ATTACHMENTS] Listing attachments:", input);
 
-      let query = `
-        SELECT a.*, u.name as uploader_name
-        FROM attachments a
-        LEFT JOIN users u ON a.created_by = u.id
-        WHERE a.owner_type = $1 AND a.owner_id = $2
-      `;
-      const params: any[] = [input.ownerType, input.ownerId];
-      let paramIndex = 3;
+        let query = `
+          SELECT a.*, u.name as uploader_name
+          FROM attachments a
+          LEFT JOIN users u ON a.created_by = u.id
+          WHERE a.owner_type = $1 AND a.owner_id = $2
+        `;
+        const params: any[] = [input.ownerType, input.ownerId];
+        let paramIndex = 3;
 
-      if (input.category) {
-        query += ` AND a.category = $${paramIndex++}`;
-        params.push(input.category);
+        if (input.category) {
+          query += ` AND a.category = $${paramIndex++}`;
+          params.push(input.category);
+        }
+
+        if (!input.includeArchived) {
+          query += ` AND a.status = 'ACTIVE'`;
+        }
+
+        // Filter private attachments for non-admin users
+        const userRole = (ctx as any)?.user?.role;
+        if (userRole && !["ADMIN", "HSE_MANAGER"].includes(userRole)) {
+          query += ` AND a.is_private = FALSE`;
+        }
+
+        query += " ORDER BY a.category, a.created_at DESC";
+
+        const attachments = await pgQuery<DbAttachment>(query, params);
+        console.log("[ATTACHMENTS] Found:", attachments.length);
+
+        return attachments.map((a) => ({
+          ...a,
+          download_url: storageService.getSignedUrl(a.storage_key),
+        }));
+      } catch (error) {
+        console.error("[ATTACHMENTS] Error in list query:", error);
+        throw error;
       }
-
-      if (!input.includeArchived) {
-        query += ` AND a.status = 'ACTIVE'`;
-      }
-
-      // Filter private attachments for non-admin users
-      const userRole = (ctx as any)?.user?.role;
-      if (userRole && !["ADMIN", "HSE_MANAGER"].includes(userRole)) {
-        query += ` AND a.is_private = FALSE`;
-      }
-
-      query += " ORDER BY a.category, a.created_at DESC";
-
-      const attachments = await pgQuery<DbAttachment>(query, params);
-      console.log("[ATTACHMENTS] Found:", attachments.length);
-
-      return attachments.map((a) => ({
-        ...a,
-        download_url: storageService.getSignedUrl(a.storage_key),
-      }));
     }),
 
   /**

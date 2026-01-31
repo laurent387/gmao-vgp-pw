@@ -63,6 +63,9 @@ const trpcHandler = trpcServer({
   endpoint: "/api/trpc",
   router: appRouter,
   createContext,
+  onError: ({ path, error }) => {
+    console.error(`[TRPC] Error on ${path}:`, error);
+  },
 });
 
 app.use("/api/trpc/*", trpcHandler);

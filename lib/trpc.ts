@@ -73,6 +73,7 @@ export const trpcClient = trpc.createClient({
   links: [
     httpLink({
       url: `${baseUrl}/api/trpc`,
+      methodOverride: 'POST', // Use POST for all requests to avoid GET query param issues
       headers: () => {
         const token = getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};

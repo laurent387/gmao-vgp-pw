@@ -4,6 +4,7 @@
  */
 
 import { useRouter } from 'expo-router';
+import { trackEvent } from './analytics';
 
 // Route parameter types
 export interface ClientRouteParams {

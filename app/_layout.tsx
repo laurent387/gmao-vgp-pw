@@ -89,6 +89,10 @@ function RootLayoutNav() {
         options={{ title: "Mon profil" }}
       />
       <Stack.Screen
+        name="profile-edit"
+        options={{ title: "Modifier le profil", headerShown: false }}
+      />
+      <Stack.Screen
         name="reset-password"
         options={{ title: "Nouveau mot de passe", headerShown: false }}
       />

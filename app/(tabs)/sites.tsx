@@ -8,6 +8,7 @@ import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { Card } from '@/components/Card';
 import { assetRepository } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
+import { useNavigation } from '@/lib/navigation';
 import type { Asset, Client, Site } from '@/types';
 
 type ClientRow = {
@@ -18,6 +19,7 @@ type ClientRow = {
 
 export default function ClientSitesScreen() {
   const router = useRouter();
+  const nav = useNavigation();
 
   const [expandedClientIds, setExpandedClientIds] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState<boolean>(false);
@@ -122,38 +124,49 @@ export default function ClientSitesScreen() {
 
     return (
       <Card style={styles.clientCard}>
-        <TouchableOpacity
-          onPress={() => toggleExpanded(item.client.id)}
-          activeOpacity={0.75}
-          testID={`client-card-${item.client.id}`}
-          style={styles.clientHeader}
-        >
-          <View style={styles.clientIconWrap}>
-            <Building2 size={18} color={colors.primary} />
-          </View>
+        <View style={styles.clientHeaderContainer}>
+          <TouchableOpacity
+            onPress={() => toggleExpanded(item.client.id)}
+            activeOpacity={0.75}
+            testID={`client-card-${item.client.id}`}
+            style={styles.clientHeader}
+          >
+            <View style={styles.clientIconWrap}>
+              <Building2 size={18} color={colors.primary} />
+            </View>
 
-          <View style={styles.clientHeaderText}>
-            <Text style={styles.clientName} numberOfLines={1}>
-              {item.client.name}
-            </Text>
-            <View style={styles.clientMetaRow}>
-              <View style={styles.metaPill}>
-                <MapPin size={14} color={colors.textSecondary} />
-                <Text style={styles.metaPillText}>{item.sites.length} site(s)</Text>
-              </View>
-              <View style={styles.metaPill}>
-                <Package size={14} color={colors.textSecondary} />
-                <Text style={styles.metaPillText}>{item.assetsCount} équipement(s)</Text>
+            <View style={styles.clientHeaderText}>
+              <Text style={styles.clientName} numberOfLines={1}>
+                {item.client.name}
+              </Text>
+              <View style={styles.clientMetaRow}>
+                <View style={styles.metaPill}>
+                  <MapPin size={14} color={colors.textSecondary} />
+                  <Text style={styles.metaPillText}>{item.sites.length} site(s)</Text>
+                </View>
+                <View style={styles.metaPill}>
+                  <Package size={14} color={colors.textSecondary} />
+                  <Text style={styles.metaPillText}>{item.assetsCount} équipement(s)</Text>
+                </View>
               </View>
             </View>
-          </View>
 
-          {expanded ? (
-            <ChevronDown size={18} color={colors.textMuted} />
-          ) : (
-            <ChevronRight size={18} color={colors.textMuted} />
-          )}
-        </TouchableOpacity>
+            {expanded ? (
+              <ChevronDown size={18} color={colors.textMuted} />
+            ) : (
+              <ChevronRight size={18} color={colors.textMuted} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={() => nav.goToClient(item.client.id)}
+            style={styles.clientDetailsButton}
+            accessibilityLabel={`Voir détails du client ${item.client.name}`}
+            accessibilityRole="button"
+          >
+            <ChevronRight size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
 
         {expanded && (
           <View style={styles.sitesList} testID={`client-sites-${item.client.id}`}>
@@ -228,11 +241,26 @@ const styles = StyleSheet.create({
     padding: 0,
     overflow: 'hidden',
   },
+  clientHeaderContainer: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+  },
   clientHeader: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  clientDetailsButton: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 44,
+    minHeight: 44,
   },
   clientIconWrap: {
     width: 36,

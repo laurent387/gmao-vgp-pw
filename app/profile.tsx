@@ -11,13 +11,15 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { User, Mail, Lock, LogOut, Save, ArrowLeft, Send } from 'lucide-react-native';
+import { User, Mail, Lock, LogOut, Save, ArrowLeft, Send, Pencil } from 'lucide-react-native';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
+import { useNavigation } from '@/lib/navigation';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const nav = useNavigation();
   const { user, logout } = useAuth();
 
   const [name, setName] = useState(user?.name || '');
@@ -137,7 +139,14 @@ export default function ProfileScreen() {
           <ArrowLeft size={24} color={colors.text} />
         </TouchableOpacity>
         <Text style={styles.title}>Mon Profil</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity
+          style={styles.editButton}
+          onPress={() => nav.goToProfileEdit()}
+          accessibilityLabel="Modifier le profil"
+          accessibilityHint="Double-tap to edit your profile"
+        >
+          <Pencil size={24} color={colors.primary} />
+        </TouchableOpacity>
       </View>
 
       {/* Avatar / Icon */}
@@ -265,13 +274,13 @@ const styles = StyleSheet.create({
   backButton: {
     padding: spacing.sm,
   },
+  editButton: {
+    padding: spacing.sm,
+  },
   title: {
     fontSize: 24,
     fontWeight: '700',
     color: colors.text,
-  },
-  placeholder: {
-    width: 40,
   },
   avatarContainer: {
     alignItems: 'center',

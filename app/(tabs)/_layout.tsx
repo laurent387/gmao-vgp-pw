@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
-import { Platform, TouchableOpacity } from 'react-native';
+import { Platform } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
-import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings, FileCheck, User } from 'lucide-react-native';
+import { LayoutDashboard, Package, Calendar, ClipboardList, AlertTriangle, RefreshCw, Shield, CheckSquare, Building2, Wrench, Settings, FileCheck } from 'lucide-react-native';
 import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { AvatarButton } from '@/components/interactive';
+import { useNavigation } from '@/lib/navigation';
 
 export default function TabLayout() {
   const router = useRouter();
+  const nav = useNavigation();
   const { isAuthenticated, isLoading, user, canValidate } = useAuth();
 
   const isManager = canValidate();
@@ -20,12 +23,12 @@ export default function TabLayout() {
   }, [isAuthenticated, isLoading]);
 
   const ProfileButton = () => (
-    <TouchableOpacity
-      onPress={() => router.push('/profile')}
-      style={{ marginRight: 16, padding: 4 }}
-    >
-      <User size={24} color={colors.primary} />
-    </TouchableOpacity>
+    <AvatarButton
+      name={user?.name}
+      onPress={() => nav.goToProfile()}
+      testID="header-avatar-button"
+      size="md"
+    />
   );
 
   return (

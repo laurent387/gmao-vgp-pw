@@ -22,22 +22,38 @@ function isoNow(): string {
 // Priority: ctx.rawJson.json > ctx.rawJson > input
 function unwrapInput<T>(input: any, ctx?: any): T {
   const rawJson = (ctx as any)?.rawJson;
-  
+
   // superjson envelope: { json: { ... }, meta: {...} }
   if (rawJson?.json) {
     return rawJson.json;
   }
-  
+
   // Direct JSON object in rawJson
   if (rawJson && typeof rawJson === 'object' && Object.keys(rawJson).length > 0) {
     return rawJson;
   }
-  
+
   // Already parsed by tRPC
   if (input && typeof input === 'object' && Object.keys(input).length > 0) {
     return input;
   }
-  
+
+  // Try to parse input from URL for GET queries
+  try {
+    const url = (ctx as any)?.req?.url;
+    if (url) {
+      const searchParams = new URL(url).searchParams;
+      const inputParam = searchParams.get('input');
+      if (inputParam) {
+        const decoded = JSON.parse(inputParam);
+        if (decoded?.json) return decoded.json;
+        if (decoded && typeof decoded === 'object') return decoded;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
   // Fallback to empty object
   return {} as T;
 }
@@ -231,25 +247,33 @@ export const adminRouter = createTRPCRouter({
   }),
 
   getClient: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data?.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID client requis" });
+      }
       const clients = await pgQuery<any>(
         `SELECT id, name, siret, tva_number, contact_name, contact_email, contact_phone, 
                 address, access_instructions, billing_address, billing_email, internal_notes, 
                 status, created_at 
          FROM clients WHERE id = $1`,
-        [input.id]
+        [data.id]
       );
       return clients[0] || null;
     }),
 
   getClientStats: protectedProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const data = unwrapInput<{ id: string }>(input, ctx);
+      if (!data?.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID client requis" });
+      }
       // Get site count
       const siteCountResult = await pgQuery<{ count: string }>(
         "SELECT COUNT(*) as count FROM sites WHERE client_id = $1",
-        [input.id]
+        [data.id]
       );
       const site_count = parseInt(siteCountResult[0]?.count || '0', 10);
 
@@ -258,7 +282,7 @@ export const adminRouter = createTRPCRouter({
         `SELECT COUNT(*) as count FROM assets a 
          JOIN sites s ON a.site_id = s.id 
          WHERE s.client_id = $1`,
-        [input.id]
+        [data.id]
       );
       const asset_count = parseInt(assetCountResult[0]?.count || '0', 10);
 
@@ -269,7 +293,7 @@ export const adminRouter = createTRPCRouter({
          JOIN sites s ON a.site_id = s.id
          WHERE s.client_id = $1
          ORDER BY r.performed_at DESC LIMIT 1`,
-        [input.id]
+        [data.id]
       );
       const last_report_date = lastReportResult[0]?.performed_at || null;
 
@@ -280,7 +304,7 @@ export const adminRouter = createTRPCRouter({
          JOIN sites s ON a.site_id = s.id
          WHERE s.client_id = $1 AND ac.next_due_at IS NOT NULL
          ORDER BY ac.next_due_at ASC LIMIT 1`,
-        [input.id]
+        [data.id]
       );
       const next_due_date = nextDueResult[0]?.next_due_at || null;
 

@@ -16,6 +16,7 @@ import { colors, spacing, borderRadius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
 import { useNavigation } from '@/lib/navigation';
+import { trackEvent } from '@/lib/analytics';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -141,7 +142,10 @@ export default function ProfileScreen() {
         <Text style={styles.title}>Mon Profil</Text>
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => nav.goToProfileEdit()}
+          onPress={() => {
+            trackEvent('navigate_to_profile_edit', { source: 'profile_header' });
+            nav.goToProfileEdit();
+          }}
           accessibilityLabel="Modifier le profil"
           accessibilityHint="Double-tap to edit your profile"
         >

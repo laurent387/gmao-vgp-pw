@@ -7,5 +7,3 @@ export { ClickableRow } from './ClickableRow';
 export { EntityLink } from './EntityLink';
 export { StatChipLink } from './StatChipLink';
 export { AvatarButton } from './AvatarButton';
-
-export type { StatChipLinkProps } from './StatChipLink';

@@ -20,12 +20,14 @@ import { maintenanceRepository } from '@/repositories/MaintenanceRepository';
 import { Asset, AssetControl, Report, NonConformity, MaintenanceLog, Document } from '@/types';
 import { AttachmentManager } from '@/components/AttachmentManager';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigation } from '@/lib/navigation';
 
 type TabType = 'info' | 'controls' | 'actions' | 'maintenance' | 'documents';
 
 export default function AssetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const nav = useNavigation();
   const { isReadOnly, canEdit } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('info');
   const [refreshing, setRefreshing] = useState(false);
@@ -175,10 +177,20 @@ export default function AssetDetailScreen() {
       </SectionCard>
 
       <SectionCard title="Localisation">
-        <View style={styles.infoRow}>
+        <TouchableOpacity
+          style={styles.infoRow}
+          onPress={() => {
+            if ((asset as any).site_id) {
+              nav.goToInventory((asset as any).site_id, (asset as any).client_id);
+            }
+          }}
+          disabled={!(asset as any).site_id}
+          accessibilityLabel={`Voir le site ${asset.site_name}`}
+        >
           <Text style={styles.infoLabel}>Site</Text>
           <Text style={styles.infoValue}>{asset.site_name || '-'}</Text>
-        </View>
+          <ChevronRight size={16} color={colors.textMuted} />
+        </TouchableOpacity>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Zone</Text>
           <Text style={styles.infoValue}>{asset.zone_name || '-'}</Text>
@@ -199,7 +211,11 @@ export default function AssetDetailScreen() {
           <Text style={styles.infoValue}>{formatDate(asset.mise_en_service)}</Text>
         </View>
         {asset.next_due_at && (
-          <View style={styles.infoRow}>
+          <TouchableOpacity
+            style={styles.infoRow}
+            onPress={() => nav.goToPlanning(asset.is_overdue ? 'overdue' : 'due30')}
+            accessibilityLabel="Voir les échéances"
+          >
             <Text style={styles.infoLabel}>Prochain contrôle</Text>
             <View style={styles.dueDateContainer}>
               <Text style={[styles.infoValue, asset.is_overdue && styles.overdueText]}>
@@ -207,7 +223,8 @@ export default function AssetDetailScreen() {
               </Text>
               {asset.is_overdue && <OverdueBadge />}
             </View>
-          </View>
+            <ChevronRight size={16} color={colors.textMuted} />
+          </TouchableOpacity>
         )}
       </SectionCard>
 
@@ -313,7 +330,12 @@ export default function AssetDetailScreen() {
       <SectionCard title="Historique des rapports">
         {reports && reports.length > 0 ? (
           reports.map((report) => (
-            <TouchableOpacity key={report.id} style={styles.reportItem}>
+            <TouchableOpacity
+              key={report.id}
+              style={styles.reportItem}
+              onPress={() => router.push(`/vgp/report/${report.id}`)}
+              accessibilityLabel="Ouvrir le rapport"
+            >
               <View style={styles.reportInfo}>
                 <Text style={styles.reportDate}>{formatDate(report.performed_at)}</Text>
                 <StatusBadge status={report.conclusion} />
@@ -458,10 +480,20 @@ export default function AssetDetailScreen() {
             <Text style={styles.headerCode}>{asset.code_interne}</Text>
             <Text style={styles.headerDesignation}>{asset.designation}</Text>
             <View style={styles.headerMeta}>
-              <View style={styles.metaItem}>
+              <TouchableOpacity
+                style={styles.metaItem}
+                onPress={() => {
+                  if ((asset as any).site_id) {
+                    nav.goToInventory((asset as any).site_id, (asset as any).client_id);
+                  }
+                }}
+                disabled={!(asset as any).site_id}
+                accessibilityLabel={`Voir le site ${asset.site_name}`}
+              >
                 <MapPin size={14} color={colors.textMuted} />
                 <Text style={styles.metaText}>{asset.site_name}</Text>
-              </View>
+                <ChevronRight size={14} color={colors.textMuted} />
+              </TouchableOpacity>
               <View style={styles.metaItem}>
                 <Tag size={14} color={colors.textMuted} />
                 <Text style={styles.metaText}>{asset.categorie}</Text>

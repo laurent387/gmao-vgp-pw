@@ -6,6 +6,7 @@ import { colors } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { AvatarButton } from '@/components/interactive';
 import { useNavigation } from '@/lib/navigation';
+import { trackEvent } from '@/lib/analytics';
 
 export default function TabLayout() {
   const router = useRouter();
@@ -25,7 +26,10 @@ export default function TabLayout() {
   const ProfileButton = () => (
     <AvatarButton
       name={user?.name}
-      onPress={() => nav.goToProfile()}
+      onPress={() => {
+        trackEvent('navigate_to_profile', { source: 'header' });
+        nav.goToProfile();
+      }}
       testID="header-avatar-button"
       size="md"
     />

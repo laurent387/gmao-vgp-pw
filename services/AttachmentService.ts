@@ -147,7 +147,7 @@ class AttachmentService {
 
     try {
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 1,
         allowsEditing: false,
       });
@@ -177,7 +177,7 @@ class AttachmentService {
 
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         quality: 1,
         allowsEditing: false,
       });
@@ -246,7 +246,7 @@ class AttachmentService {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/attachments/upload`, {
+      const response = await fetch(`${API_BASE_URL}/api/attachments/upload`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.authToken}`,

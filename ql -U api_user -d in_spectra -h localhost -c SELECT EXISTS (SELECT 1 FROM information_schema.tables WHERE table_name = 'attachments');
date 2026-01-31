@@ -1,0 +1,36 @@
+                              Table "public.attachments"
+       Column       |           Type           | Collation | Nullable |    Default     
+--------------------+--------------------------+-----------+----------+----------------
+ id                 | text                     |           | not null | 
+ owner_type         | text                     |           | not null | 
+ owner_id           | text                     |           | not null | 
+ file_type          | text                     |           | not null | 
+ category           | text                     |           | not null | 
+ title              | text                     |           | not null | 
+ original_file_name | text                     |           | not null | 
+ mime_type          | text                     |           | not null | 
+ size_bytes         | integer                  |           | not null | 0
+ storage_key        | text                     |           | not null | 
+ is_private         | boolean                  |           | not null | false
+ checksum           | text                     |           |          | 
+ status             | text                     |           | not null | 'ACTIVE'::text
+ version_number     | integer                  |           | not null | 1
+ parent_id          | text                     |           |          | 
+ created_at         | timestamp with time zone |           | not null | 
+ created_by         | text                     |           | not null | 
+ updated_at         | timestamp with time zone |           | not null | 
+ updated_by         | text                     |           |          | 
+ archived_at        | timestamp with time zone |           |          | 
+Indexes:
+    "attachments_pkey" PRIMARY KEY, btree (id)
+    "idx_attachments_category" btree (category)
+    "idx_attachments_owner" btree (owner_type, owner_id)
+    "idx_attachments_parent" btree (parent_id)
+    "idx_attachments_status" btree (status)
+Foreign-key constraints:
+    "attachments_created_by_fkey" FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+    "attachments_parent_id_fkey" FOREIGN KEY (parent_id) REFERENCES attachments(id) ON DELETE SET NULL
+    "attachments_updated_by_fkey" FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
+Referenced by:
+    TABLE "attachments" CONSTRAINT "attachments_parent_id_fkey" FOREIGN KEY (parent_id) REFERENCES attachments(id) ON DELETE SET NULL
+

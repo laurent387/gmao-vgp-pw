@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   headerTitle: {
-    ...typography.heading2,
+    ...typography.h2,
     textAlign: 'center',
     flex: 1,
   },

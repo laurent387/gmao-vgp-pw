@@ -1,6 +1,6 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Calendar } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
@@ -19,9 +19,27 @@ interface TimelineItem extends DueEcheance {
 
 export default function PlanningScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ status?: string }>();
   const isDesktop = useIsDesktop();
-  const [filter, setFilter] = useState<FilterType>('all');
+  const mapStatusToFilter = (status?: string): FilterType => {
+    switch (status) {
+      case 'overdue':
+        return 'overdue';
+      case 'due7':
+        return 'week';
+      case 'due30':
+        return 'month';
+      default:
+        return 'all';
+    }
+  };
+
+  const [filter, setFilter] = useState<FilterType>(() => mapStatusToFilter(params.status));
   const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    setFilter(mapStatusToFilter(params.status));
+  }, [params.status]);
 
   const { data: echeances, isLoading, refetch } = useQuery<DueEcheance[]>({
     queryKey: ['echeances', filter],

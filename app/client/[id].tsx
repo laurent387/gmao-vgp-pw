@@ -22,9 +22,11 @@ import { ClientSheet } from '@/components/ClientSheet';
 import { Client } from '@/types';
 import { canEditClient, CLIENT_STATUS_OPTIONS } from '@/utils/clientPermissions';
 import { Button } from '@/components/Button';
+import { useNavigation } from '@/lib/navigation';
 
 export default function ClientProfileScreen() {
   const router = useRouter();
+  const nav = useNavigation();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const userRole = user?.role || 'TECHNICIAN';
@@ -99,12 +101,17 @@ export default function ClientProfileScreen() {
 
   const handleViewAssets = () => {
     // Navigate to inventory filtered by client
-    router.push(`/(tabs)/inventory?client_id=${id}`);
+    if (id) nav.goToInventory(undefined, id);
   };
 
   const handleViewReports = () => {
-    // Navigate to reports filtered by client
-    router.push(`/(tabs)/missions?client_id=${id}`);
+    // Navigate to missions list (client filter not yet supported)
+    nav.goToMissions();
+  };
+
+  const handleViewNextDue = () => {
+    // Navigate to planning filtered by upcoming due dates
+    nav.goToPlanning('due30');
   };
 
   // Combine client data with stats
@@ -163,6 +170,7 @@ export default function ClientProfileScreen() {
           onEdit={canEditClient(userRole) ? handleEdit : undefined}
           onViewAssets={handleViewAssets}
           onViewReports={handleViewReports}
+          onViewNextDue={handleViewNextDue}
         />
       </ScrollView>
 

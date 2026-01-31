@@ -84,27 +84,27 @@ export const useNavigation = () => {
 
   return {
     // Profile navigation
-    goToProfile: () => router.push(routes.profile()),
-    goToProfileEdit: () => router.push(routes.profileEdit()),
+    goToProfile: () => router.push(routes.profile() as any),
+    goToProfileEdit: () => router.push(routes.profileEdit() as any),
     
     // Entity navigation
-    goToClient: (id: string) => router.push(routes.clientDetail(id)),
+    goToClient: (id: string) => router.push(routes.clientDetail(id) as any),
     goToEquipment: (id: string, siteId?: string, clientId?: string) =>
-      router.push(routes.equipmentDetail(id, siteId, clientId)),
-    goToMission: (id: string) => router.push(routes.missionDetail(id)),
-    goToNonConformity: (id: string, assetId?: string) => router.push(routes.ncDetail(id, assetId)),
+      router.push(routes.equipmentDetail(id, siteId, clientId) as any),
+    goToMission: (id: string) => router.push(routes.missionDetail(id) as any),
+    goToNonConformity: (id: string, assetId?: string) => router.push(routes.ncDetail(id, assetId) as any),
     
     // List views with filters
     goToInventory: (siteId?: string, clientId?: string) =>
-      router.push(routes.inventory(siteId, clientId)),
+      router.push(routes.inventory(siteId, clientId) as any),
     goToPlanning: (status?: 'overdue' | 'due30', assetId?: string) =>
-      router.push(routes.planning(status, assetId)),
-    goToSites: () => router.push(routes.sites()),
-    goToDashboard: () => router.push(routes.dashboard()),
-    goToMissions: () => router.push(routes.missions()),
-    goToNCList: () => router.push(routes.nc()),
-    goToAdmin: () => router.push(routes.admin()),
-    goToSync: () => router.push(routes.sync()),
+      router.push(routes.planning(status, assetId) as any),
+    goToSites: () => router.push(routes.sites() as any),
+    goToDashboard: () => router.push(routes.dashboard() as any),
+    goToMissions: () => router.push(routes.missions() as any),
+    goToNCList: () => router.push(routes.nc() as any),
+    goToAdmin: () => router.push(routes.admin() as any),
+    goToSync: () => router.push(routes.sync() as any),
     
     // Generic push (for custom navigation)
     push: (path: any) => router.push(path),
@@ -181,7 +181,7 @@ export const useDeepLinkNavigation = () => {
         nav.goToMission(parsed.id);
         return true;
       case 'nc':
-        nav.goToNC(parsed.id, parsed.params?.assetId);
+        nav.goToNonConformity(parsed.id, parsed.params?.assetId);
         return true;
       default:
         return false;

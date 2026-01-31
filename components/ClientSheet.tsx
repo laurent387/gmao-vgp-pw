@@ -47,6 +47,8 @@ interface ClientSheetProps {
   onViewAssets?: () => void;
   /** Callback to view client's reports */
   onViewReports?: () => void;
+  /** Callback to view next due date (planning) */
+  onViewNextDue?: () => void;
   /** Show loading state */
   isLoading?: boolean;
 }
@@ -62,6 +64,7 @@ export function ClientSheet({
   onEdit,
   onViewAssets,
   onViewReports,
+  onViewNextDue,
   isLoading = false,
 }: ClientSheetProps) {
   const statusInfo = getClientStatusInfo(client.status);
@@ -284,7 +287,11 @@ export function ClientSheet({
           )}
 
           {canView('next_due_date') && (
-            <View style={styles.statCard}>
+            <TouchableOpacity
+              style={styles.statCard}
+              onPress={onViewNextDue}
+              disabled={!onViewNextDue}
+            >
               <Clock size={24} color={client.next_due_date ? colors.warning : colors.textMuted} />
               <Text style={styles.statValue}>
                 {client.next_due_date
@@ -292,7 +299,7 @@ export function ClientSheet({
                   : '-'}
               </Text>
               <Text style={styles.statLabel}>Prochaine échéance</Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
       </View>

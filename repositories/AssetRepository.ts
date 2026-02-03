@@ -11,6 +11,8 @@ export interface AssetFilters {
   categorie?: string;
   statut?: AssetStatus;
   search?: string;
+  sortBy?: 'code_interne' | 'designation' | 'marque' | 'modele' | 'categorie' | 'statut' | 'created_at' | 'criticite';
+  sortOrder?: 'ASC' | 'DESC';
 }
 
 export class AssetRepository extends BaseRepository<Asset> {
@@ -74,8 +76,21 @@ export class AssetRepository extends BaseRepository<Asset> {
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
-    
-    query += ' ORDER BY a.code_interne';
+
+    const sortColumnMap: Record<string, string> = {
+      code_interne: 'a.code_interne',
+      designation: 'a.designation',
+      marque: 'a.marque',
+      modele: 'a.modele',
+      categorie: 'a.categorie',
+      statut: 'a.statut',
+      created_at: 'a.created_at',
+      criticite: 'a.criticite',
+    };
+    const sortColumn = sortColumnMap[filters?.sortBy || 'code_interne'] || 'a.code_interne';
+    const sortOrder = filters?.sortOrder === 'DESC' ? 'DESC' : 'ASC';
+
+    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
     
     const results = await db.getAllAsync<Omit<Asset, 'is_overdue'> & { is_overdue: number }>(query, params);
     return results.map(r => ({ ...r, is_overdue: r.is_overdue === 1 }) as Asset);

@@ -19,10 +19,12 @@ export const colors = {
   infoLight: '#DBEAFE',
   
   background: '#F8FAFC',
+  backgroundSecondary: '#F1F5F9',
   surface: '#FFFFFF',
   surfaceAlt: '#F1F5F9',
   
   text: '#1E293B',
+  textPrimary: '#1E293B',
   textSecondary: '#64748B',
   textMuted: '#94A3B8',
   textInverse: '#FFFFFF',
@@ -81,6 +83,11 @@ export const typography = {
     fontSize: 14,
     fontWeight: '600' as const,
     lineHeight: 20,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontWeight: '600' as const,
+    lineHeight: 22,
   },
   body: {
     fontSize: 15,

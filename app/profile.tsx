@@ -9,9 +9,11 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Switch,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { User, Mail, Lock, LogOut, Save, ArrowLeft, Send, Pencil } from 'lucide-react-native';
+import { User, Mail, Lock, LogOut, Save, ArrowLeft, Send, Pencil, Users, Shield } from 'lucide-react-native';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
@@ -21,7 +23,8 @@ import { trackEvent } from '@/lib/analytics';
 export default function ProfileScreen() {
   const router = useRouter();
   const nav = useNavigation();
-  const { user, logout } = useAuth();
+  const queryClient = useQueryClient();
+  const { user, logout, isAdmin } = useAuth();
 
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -29,6 +32,38 @@ export default function ProfileScreen() {
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+
+  // Query all users for admin section
+  const { data: allUsers, refetch: refetchUsers } = useQuery({
+    queryKey: ['all-users-admin'],
+    queryFn: async () => {
+      const { getUsers } = await import('@/app/api');
+      const response = await getUsers();
+      return response.data as Array<{ 
+        id: string; 
+        name: string; 
+        email: string; 
+        role: string; 
+        can_be_responsible: boolean;
+      }>;
+    },
+    enabled: isAdmin?.() ?? false,
+  });
+
+  // Mutation to toggle can_be_responsible
+  const toggleResponsibleMutation = useMutation({
+    mutationFn: async ({ userId, canBeResponsible }: { userId: string; canBeResponsible: boolean }) => {
+      const { updateUserCanBeResponsible } = await import('@/app/api');
+      await updateUserCanBeResponsible(userId, canBeResponsible);
+    },
+    onSuccess: () => {
+      refetchUsers();
+      queryClient.invalidateQueries({ queryKey: ['responsible-users'] });
+    },
+    onError: (error: any) => {
+      Alert.alert('Erreur', error?.message || 'Impossible de modifier');
+    },
+  });
 
   const updateProfileMutation = trpc.auth.updateProfile.useMutation();
   const requestPasswordResetMutation = trpc.auth.requestPasswordReset.useMutation();
@@ -245,6 +280,47 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Admin Section - User Management */}
+      {isAdmin?.() && (
+        <View style={styles.section}>
+          <View style={styles.adminHeader}>
+            <Shield size={20} color={colors.primary} />
+            <Text style={styles.sectionTitle}>Administration</Text>
+          </View>
+          
+          <Text style={styles.adminSubtitle}>Utilisateurs responsables d'actions</Text>
+          <Text style={styles.adminHint}>
+            Activez les utilisateurs pouvant être assignés comme responsable d'une action corrective.
+          </Text>
+
+          <View style={styles.userList}>
+            {allUsers?.filter(u => u.role !== 'CLIENT' && u.role !== 'AUDITOR').map((u) => (
+              <View key={u.id} style={styles.userRow}>
+                <View style={styles.userInfo}>
+                  <Users size={18} color={colors.textMuted} />
+                  <View style={styles.userDetails}>
+                    <Text style={styles.userNameText}>{u.name}</Text>
+                    <Text style={styles.userEmailText}>{u.email}</Text>
+                    <Text style={styles.userRoleText}>{getRoleLabel(u.role)}</Text>
+                  </View>
+                </View>
+                <Switch
+                  value={u.can_be_responsible}
+                  onValueChange={(value) => 
+                    toggleResponsibleMutation.mutate({ userId: u.id, canBeResponsible: value })
+                  }
+                  trackColor={{ false: colors.border, true: colors.primaryLight }}
+                  thumbColor={u.can_be_responsible ? colors.primary : colors.textMuted}
+                />
+              </View>
+            ))}
+            {(!allUsers || allUsers.filter(u => u.role !== 'CLIENT' && u.role !== 'AUDITOR').length === 0) && (
+              <Text style={styles.noUsersMessage}>Aucun utilisateur trouvé</Text>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Logout Section */}
       <View style={styles.section}>
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
@@ -437,5 +513,65 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  // Admin section styles
+  adminHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  adminSubtitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  adminHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: spacing.md,
+  },
+  userList: {
+    gap: spacing.sm,
+  },
+  userRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.surface,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  userInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    flex: 1,
+  },
+  userDetails: {
+    flex: 1,
+  },
+  userNameText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  userEmailText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  userRoleText: {
+    fontSize: 11,
+    color: colors.primary,
+    fontWeight: '500',
+  },
+  noUsersMessage: {
+    textAlign: 'center',
+    color: colors.textMuted,
+    fontStyle: 'italic',
+    padding: spacing.md,
   },
 });

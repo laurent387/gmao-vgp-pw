@@ -4,7 +4,9 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
 import { useDatabase } from '@/contexts/DatabaseContext';
-import { trpcClient, setTrpcAuthToken } from '@/lib/trpc';
+import { setApiAuthToken } from '@/app/api';
+import * as api from '@/app/api';
+import { attachmentService } from '@/services/AttachmentService';
 
 const STORAGE_KEY = 'inspectra_auth';
 
@@ -77,10 +79,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
     if (stored?.token) {
       try {
-        setTrpcAuthToken(stored.token);
-        const meResult = await trpcClient.auth.me.query();
-        // Handle potential wrapping: { json: { id, email, ... } } or direct { id, email, ... }
-        const me: any = (meResult as any)?.json ?? meResult;
+        setApiAuthToken(stored.token);
+        attachmentService.setAuthToken(stored.token);
+        const response = await api.getMe();
+        const me = response.data;
         if (me?.id && me?.email) {
           const user: User = {
             id: me.id,
@@ -100,6 +102,11 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     }
     
     if (stored?.user?.id) {
+      // Set tokens for local restore as well
+      if (stored.token) {
+        setApiAuthToken(stored.token);
+        attachmentService.setAuthToken(stored.token);
+      }
       console.log('[AUTH] Restored session for:', stored.user.email);
       setState({ user: stored.user, isLoading: false, isAuthenticated: true, mustChangePassword: false });
       return;
@@ -120,15 +127,14 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       );
 
       const result = await Promise.race([
-        trpcClient.auth.login.mutate({
+        api.login({
           email: normalizedEmail,
           password: password || 'demo123',
         }),
         timeoutPromise,
       ]);
 
-      // tRPC on web can wrap the response as { json: { user, token } }
-      const payload: any = (result as any)?.json ?? result;
+      const payload = result.data;
       const userResult = payload?.user;
       const tokenResult = payload?.token;
 
@@ -148,7 +154,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
 
       const mustChangePassword = Boolean(payload?.mustChangePassword);
       await setStoredAuth({ user, token: tokenResult });
-      setTrpcAuthToken(tokenResult);
+      setApiAuthToken(tokenResult);
+      attachmentService.setAuthToken(tokenResult);
       setState({ user, isLoading: false, isAuthenticated: true, mustChangePassword });
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
       return { success: true, mustChangePassword };
@@ -162,7 +169,8 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
   const logout = useCallback(async () => {
     console.log('[AUTH] Logging out');
     await setStoredAuth(null);
-    setTrpcAuthToken(null);
+    setApiAuthToken(null);
+    attachmentService.setAuthToken(null);
     setState({ user: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
   }, []);
 
@@ -191,6 +199,10 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     return state.user?.role === 'AUDITOR';
   }, [state.user]);
 
+  const isAdmin = useCallback((): boolean => {
+    return state.user?.role === 'ADMIN';
+  }, [state.user]);
+
   return {
     ...state,
     login,
@@ -200,6 +212,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     canValidate,
     canEdit,
     isReadOnly,
+    isAdmin,
     markPasswordChanged,
   };
 });

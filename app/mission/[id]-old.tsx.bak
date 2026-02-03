@@ -1,0 +1,559 @@
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  Calendar, MapPin, User, Play, CheckCircle, Users, 
+  Wrench, Eye, Settings, FileEdit, ChevronRight, Building2 
+} from 'lucide-react-native';
+import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
+import { StatusBadge, CriticalityBadge } from '@/components/Badge';
+import { Button } from '@/components/Button';
+import { EmptyState, LoadingState } from '@/components/EmptyState';
+import { missionRepository } from '@/repositories/MissionRepository';
+import { reportRepository } from '@/repositories/ReportRepository';
+import { Mission, Report, OperationType } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+
+const OPERATION_ICONS: Record<OperationType, React.ReactNode> = {
+  MAINTENANCE: <Wrench size={18} color={colors.primary} />,
+  INSPECTION: <Eye size={18} color={colors.info} />,
+  REPARATION: <Settings size={18} color={colors.warning} />,
+  MODIFICATION: <FileEdit size={18} color={colors.textSecondary} />,
+};
+
+const OPERATION_LABELS: Record<OperationType, string> = {
+  MAINTENANCE: 'Maintenance Préventive',
+  INSPECTION: 'Vérification',
+  REPARATION: 'Maintenance Corrective',
+  MODIFICATION: 'Autres',
+};
+
+export default function MissionDetailScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const { canEdit, user } = useAuth();
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const { data: mission, isLoading, refetch } = useQuery<Mission | null>({
+    queryKey: ['mission', id],
+    queryFn: () => missionRepository.getByIdWithDetails(id!),
+    enabled: !!id,
+  });
+
+  const { data: reports } = useQuery<Report[]>({
+    queryKey: ['mission-reports', id],
+    queryFn: () => reportRepository.getByMissionId(id!),
+    enabled: !!id,
+  });
+
+  const startMutation = useMutation({
+    mutationFn: () => missionRepository.updateStatus(id!, 'EN_COURS'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mission', id] });
+      queryClient.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+
+  const completeMutation = useMutation({
+    mutationFn: () => missionRepository.updateStatus(id!, 'TERMINEE'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['mission', id] });
+      queryClient.invalidateQueries({ queryKey: ['missions'] });
+    },
+  });
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  };
+
+  if (isLoading) {
+    return <LoadingState message="Chargement de la mission..." />;
+  }
+
+  if (!mission) {
+    return (
+      <EmptyState
+        title="Mission non trouvée"
+        message="Cette mission n'existe pas ou a été supprimée"
+      />
+    );
+  }
+
+  const formatDate = (date: string) => {
+    return new Date(date).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    });
+  };
+
+  const formatDateLong = (date: string) => {
+    return new Date(date).toLocaleDateString('fr-FR', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const canStart = mission.status === 'PLANIFIEE' && canEdit();
+  const canComplete = mission.status === 'EN_COURS' && canEdit();
+  const canExecute = (mission.status === 'PLANIFIEE' || mission.status === 'EN_COURS') && canEdit();
+
+  const handleStartMission = () => {
+    startMutation.mutate();
+  };
+
+  const handleCompleteMission = () => {
+    completeMutation.mutate();
+  };
+
+  const handleExecuteControl = (assetId: string, operationType?: OperationType) => {
+    router.push({
+      pathname: '/mission/execute',
+      params: { missionId: id, assetId, operationType },
+    });
+  };
+
+  const getAssetReportStatus = (assetId: string) => {
+    return reports?.find(r => r.asset_id === assetId);
+  };
+
+  // Get operations and technicians from mission data
+  const operations = (mission as any).operations || [];
+  const technicians = (mission as any).technicians || [];
+
+  return (
+    <>
+      <Stack.Screen options={{ title: 'Ordre de Mission' }} />
+      
+      <ScrollView 
+        style={styles.container}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      >
+        {/* Header Card - Mobile First */}
+        <View style={styles.headerCard}>
+          <View style={styles.headerTop}>
+            <StatusBadge status={mission.status} size="lg" />
+            <Text style={styles.missionDate}>{formatDate(mission.scheduled_at)}</Text>
+          </View>
+          
+          <Text style={styles.headerTitle}>Mission du {formatDateLong(mission.scheduled_at)}</Text>
+          
+          <View style={styles.infoRow}>
+            <Building2 size={16} color={colors.textMuted} />
+            <Text style={styles.infoText}>
+              {(mission as any).client_name || 'Client non spécifié'}
+            </Text>
+          </View>
+          
+          <View style={styles.infoRow}>
+            <MapPin size={16} color={colors.textMuted} />
+            <Text style={styles.infoText}>{(mission as any).site_name || 'Site non spécifié'}</Text>
+          </View>
+        </View>
+
+        {/* Technicians Section */}
+        {technicians.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Users size={20} color={colors.primary} />
+              <Text style={styles.sectionTitle}>Techniciens assignés ({technicians.length})</Text>
+            </View>
+            <View style={styles.techniciansList}>
+              {technicians.map((tech: any) => (
+                <View key={tech.id} style={styles.technicianChip}>
+                  <User size={14} color={colors.primary} />
+                  <Text style={styles.technicianName}>{tech.name}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Operations Section */}
+        {operations.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Wrench size={20} color={colors.primary} />
+              <Text style={styles.sectionTitle}>Opérations à réaliser ({operations.length})</Text>
+            </View>
+            <View style={styles.operationsList}>
+              {operations.map((op: any, index: number) => (
+                <View key={op.id || index} style={styles.operationItem}>
+                  {OPERATION_ICONS[op.operation_type as OperationType] || <Settings size={18} color={colors.textMuted} />}
+                  <Text style={styles.operationLabel}>
+                    {OPERATION_LABELS[op.operation_type as OperationType] || op.operation_type}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Action Buttons */}
+        {(canStart || canComplete) && (
+          <View style={styles.actionsSection}>
+            {canStart && (
+              <Button
+                title="▶️ Démarrer la mission"
+                onPress={handleStartMission}
+                loading={startMutation.isPending}
+                fullWidth
+                size="lg"
+              />
+            )}
+
+            {canComplete && (
+              <Button
+                title="✅ Terminer la mission"
+                onPress={handleCompleteMission}
+                loading={completeMutation.isPending}
+                variant="success"
+                fullWidth
+                size="lg"
+              />
+            )}
+          </View>
+        )}
+
+        {/* Equipment Section - Mobile First Cards */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Settings size={20} color={colors.primary} />
+            <Text style={styles.sectionTitle}>
+              Équipements à contrôler ({mission.assets?.length ?? 0})
+            </Text>
+          </View>
+
+          {mission.assets && mission.assets.length > 0 ? (
+            <View style={styles.assetsList}>
+              {mission.assets.map((asset) => {
+                const report = getAssetReportStatus(asset.id);
+                const hasReport = !!report;
+                
+                return (
+                  <TouchableOpacity
+                    key={asset.id}
+                    style={[styles.assetCard, hasReport && styles.assetCardCompleted]}
+                    onPress={() => !hasReport && canExecute && handleExecuteControl(asset.id)}
+                    disabled={hasReport || !canExecute}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.assetCardContent}>
+                      <View style={styles.assetHeader}>
+                        <Text style={styles.assetCode}>{asset.code_interne}</Text>
+                        <View style={styles.assetBadges}>
+                          <CriticalityBadge level={asset.criticite} />
+                          {hasReport && (
+                            <View style={styles.completedBadge}>
+                              <CheckCircle size={16} color={colors.success} />
+                              <Text style={styles.completedText}>Fait</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      
+                      <Text style={styles.assetDesignation} numberOfLines={2}>
+                        {asset.designation}
+                      </Text>
+                      
+                      <View style={styles.assetMeta}>
+                        <Text style={styles.assetCategory}>{asset.categorie}</Text>
+                        {(asset as any).zone_name && (
+                          <Text style={styles.assetZone}>📍 {(asset as any).zone_name}</Text>
+                        )}
+                      </View>
+
+                      {hasReport && report && (
+                        <View style={styles.reportPreview}>
+                          <StatusBadge status={report.conclusion} />
+                          <Text style={styles.reportDate}>
+                            Contrôlé le {formatDate(report.performed_at)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {!hasReport && canExecute && (
+                      <View style={styles.assetAction}>
+                        <ChevronRight size={24} color={colors.primary} />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>Aucun équipement associé à cette mission</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Reports Summary */}
+        {reports && reports.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <CheckCircle size={20} color={colors.success} />
+              <Text style={styles.sectionTitle}>Rapports générés ({reports.length})</Text>
+            </View>
+            
+            <View style={styles.reportsSummary}>
+              {reports.map((report) => (
+                <View key={report.id} style={styles.reportItem}>
+                  <View style={styles.reportHeader}>
+                    <Text style={styles.reportAsset}>
+                      {(report as any).asset_code || 'Équipement'}
+                    </Text>
+                    <StatusBadge status={report.conclusion} />
+                  </View>
+                  <Text style={styles.reportMeta}>
+                    {formatDate(report.performed_at)} • Signé par {report.signed_by_name || '-'}
+                  </Text>
+                  {report.summary && (
+                    <Text style={styles.reportSummary} numberOfLines={2}>
+                      {report.summary}
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* Bottom Spacing for Safe Area */}
+        <View style={{ height: spacing.xxl }} />
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  scrollContent: {
+    padding: spacing.md,
+  },
+  headerCard: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+    ...shadows.md,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  missionDate: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '600',
+    color: colors.primary,
+  },
+  headerTitle: {
+    ...typography.h2,
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  infoText: {
+    fontSize: typography.body.fontSize,
+    color: colors.textSecondary,
+  },
+  section: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadows.sm,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  sectionTitle: {
+    ...typography.h4,
+    color: colors.text,
+  },
+  techniciansList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  technicianChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: borderRadius.full,
+  },
+  technicianName: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '500',
+    color: colors.primary,
+  },
+  operationsList: {
+    gap: spacing.sm,
+  },
+  operationItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  operationLabel: {
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+    fontWeight: '500',
+  },
+  actionsSection: {
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  assetsList: {
+    gap: spacing.sm,
+  },
+  assetCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.background,
+    borderRadius: borderRadius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  assetCardCompleted: {
+    backgroundColor: colors.success + '08',
+    borderColor: colors.success,
+  },
+  assetCardContent: {
+    flex: 1,
+  },
+  assetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  assetCode: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  assetBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  completedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.success + '15',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  completedText: {
+    fontSize: typography.caption.fontSize,
+    fontWeight: '600',
+    color: colors.success,
+  },
+  assetDesignation: {
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  assetMeta: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  assetCategory: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    backgroundColor: colors.backgroundAlt,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: borderRadius.sm,
+  },
+  assetZone: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textSecondary,
+  },
+  assetAction: {
+    marginLeft: spacing.md,
+  },
+  reportPreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  reportDate: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+  },
+  emptyCard: {
+    padding: spacing.lg,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: typography.body.fontSize,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  reportsSummary: {
+    gap: spacing.sm,
+  },
+  reportItem: {
+    backgroundColor: colors.background,
+    padding: spacing.md,
+    borderRadius: borderRadius.md,
+  },
+  reportHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  reportAsset: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  reportMeta: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+  },
+  reportSummary: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+});

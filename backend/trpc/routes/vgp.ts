@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
-import { TRPCError } from "@trpc/server";
 import { pgQuery } from "../../db/postgres";
 
 // =============================================
@@ -128,6 +127,22 @@ function generateReportNumber(): string {
   return `VGP-${year}-${random}`;
 }
 
+// Helper to parse input from query string for GET requests (workaround for @hono/trpc-server)
+function parseQueryInput<T>(input: T, ctx: any): T {
+  if (input && Object.keys(input as any).length > 0) return input;
+  try {
+    const url = new URL(ctx.req.url);
+    const queryParam = url.searchParams.get("input");
+    if (queryParam) {
+      const parsed = JSON.parse(queryParam);
+      return (parsed?.json ?? parsed) as T;
+    }
+  } catch (e) {
+    console.warn("[VGP] Unable to parse query input", e);
+  }
+  return input;
+}
+
 // =============================================
 // ROUTER VGP
 // =============================================
@@ -143,17 +158,18 @@ export const vgpRouter = createTRPCRouter({
       machineType: z.string().optional(),
       activeOnly: z.boolean().optional().default(true),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const filters = parseQueryInput(input, ctx);
       let query = `SELECT * FROM vgp_templates WHERE 1=1`;
       const params: any[] = [];
       let idx = 1;
       
-      if (input?.activeOnly !== false) {
+      if (filters?.activeOnly !== false) {
         query += ` AND active = true`;
       }
-      if (input?.machineType) {
+      if (filters?.machineType) {
         query += ` AND machine_type = $${idx++}`;
-        params.push(input.machineType);
+        params.push(filters.machineType);
       }
       
       query += ` ORDER BY name, version DESC`;
@@ -163,18 +179,25 @@ export const vgpRouter = createTRPCRouter({
     }),
   
   getTemplateById: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const raw = parseQueryInput(input, ctx);
+      const filters = { id: raw?.id ?? raw?.json?.id ?? (typeof raw === 'string' ? raw : '') };
+      
+      if (!filters.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID is required" });
+      }
+      
       const templates = await pgQuery<DbVGPTemplate>(
         `SELECT * FROM vgp_templates WHERE id = $1`,
-        [input.id]
+        [filters.id]
       );
       
       if (!templates[0]) return null;
       
       const sections = await pgQuery<DbVGPSection>(
         `SELECT * FROM vgp_template_sections WHERE template_id = $1 ORDER BY sort_order`,
-        [input.id]
+        [filters.id]
       );
       
       const items = await pgQuery<DbVGPItem>(
@@ -183,7 +206,7 @@ export const vgpRouter = createTRPCRouter({
          JOIN vgp_template_sections s ON i.section_id = s.id
          WHERE s.template_id = $1
          ORDER BY s.sort_order, i.sort_order`,
-        [input.id]
+        [filters.id]
       );
       
       return {
@@ -329,7 +352,8 @@ export const vgpRouter = createTRPCRouter({
       limit: z.number().optional().default(50),
       offset: z.number().optional().default(0),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const filters = parseQueryInput(input, ctx);
       let query = `
         SELECT r.*, c.name as client_name, s.name as site_name
         FROM vgp_reports r
@@ -340,32 +364,39 @@ export const vgpRouter = createTRPCRouter({
       const params: any[] = [];
       let idx = 1;
       
-      if (input?.clientId) {
+      if (filters?.clientId) {
         query += ` AND r.client_id = $${idx++}`;
-        params.push(input.clientId);
+        params.push(filters.clientId);
       }
-      if (input?.siteId) {
+      if (filters?.siteId) {
         query += ` AND r.site_id = $${idx++}`;
-        params.push(input.siteId);
+        params.push(filters.siteId);
       }
       
       query += ` ORDER BY r.date_rapport DESC LIMIT $${idx++} OFFSET $${idx++}`;
-      params.push(input?.limit || 50, input?.offset || 0);
+      params.push(filters?.limit || 50, filters?.offset || 0);
       
       const reports = await pgQuery<DbVGPReport>(query, params);
       return reports;
     }),
   
   getReportById: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      const raw = parseQueryInput(input, ctx);
+      const filters = { id: raw?.id ?? raw?.json?.id ?? (typeof raw === 'string' ? raw : '') };
+      
+      if (!filters.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID is required" });
+      }
+      
       const reports = await pgQuery<DbVGPReport>(
         `SELECT r.*, c.name as client_name, s.name as site_name
          FROM vgp_reports r
          LEFT JOIN clients c ON r.client_id = c.id
          LEFT JOIN sites s ON r.site_id = s.id
          WHERE r.id = $1`,
-        [input.id]
+        [filters.id]
       );
       
       if (!reports[0]) return null;
@@ -384,7 +415,7 @@ export const vgpRouter = createTRPCRouter({
          LEFT JOIN assets a ON r.asset_id = a.id
          WHERE r.report_id = $1
          ORDER BY a.code_interne`,
-        [input.id]
+        [filters.id]
       );
       
       // Get observation count per run
@@ -498,8 +529,16 @@ export const vgpRouter = createTRPCRouter({
   // =============================================
   
   getRunById: publicProcedure
-    .input(z.object({ id: z.string() }))
-    .query(async ({ input }) => {
+    .input(z.any())
+    .query(async ({ input, ctx }) => {
+      // Parse input from query string for GET requests
+      const raw = parseQueryInput(input, ctx);
+      const filters = { id: raw?.id ?? raw?.json?.id ?? (typeof raw === 'string' ? raw : '') };
+      
+      if (!filters.id) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "ID is required" });
+      }
+      
       const runs = await pgQuery<DbVGPRun>(
         `SELECT r.*, 
                 a.code_interne as asset_code,
@@ -512,7 +551,7 @@ export const vgpRouter = createTRPCRouter({
          FROM vgp_inspection_runs r
          LEFT JOIN assets a ON r.asset_id = a.id
          WHERE r.id = $1`,
-        [input.id]
+        [filters.id]
       );
       
       if (!runs[0]) return null;
@@ -544,13 +583,13 @@ export const vgpRouter = createTRPCRouter({
          JOIN vgp_template_sections s ON i.section_id = s.id
          WHERE r.run_id = $1
          ORDER BY s.sort_order, i.sort_order`,
-        [input.id]
+        [filters.id]
       );
       
       // Get observations
       const observations = await pgQuery<DbVGPObservation>(
         `SELECT * FROM vgp_observations WHERE run_id = $1 ORDER BY item_numero`,
-        [input.id]
+        [filters.id]
       );
       
       const resultsMap = new Map(results.map(r => [r.item_id, r]));
@@ -701,7 +740,8 @@ export const vgpRouter = createTRPCRouter({
       statut: z.string().optional(),
       gravite: z.number().optional(),
     }).optional())
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      const filters = parseQueryInput(input, ctx);
       let query = `
         SELECT o.*, a.code_interne as asset_code, a.designation as asset_designation
         FROM vgp_observations o
@@ -711,25 +751,25 @@ export const vgpRouter = createTRPCRouter({
       const params: any[] = [];
       let idx = 1;
       
-      if (input?.runId) {
+      if (filters?.runId) {
         query += ` AND o.run_id = $${idx++}`;
-        params.push(input.runId);
+        params.push(filters.runId);
       }
-      if (input?.assetId) {
+      if (filters?.assetId) {
         query += ` AND o.asset_id = $${idx++}`;
-        params.push(input.assetId);
+        params.push(filters.assetId);
       }
-      if (input?.reportId) {
+      if (filters?.reportId) {
         query += ` AND o.run_id IN (SELECT id FROM vgp_inspection_runs WHERE report_id = $${idx++})`;
-        params.push(input.reportId);
+        params.push(filters.reportId);
       }
-      if (input?.statut) {
+      if (filters?.statut) {
         query += ` AND o.statut = $${idx++}`;
-        params.push(input.statut);
+        params.push(filters.statut);
       }
-      if (input?.gravite) {
+      if (filters?.gravite) {
         query += ` AND o.gravite = $${idx++}`;
-        params.push(input.gravite);
+        params.push(filters.gravite);
       }
       
       query += ` ORDER BY o.gravite DESC, o.item_numero`;

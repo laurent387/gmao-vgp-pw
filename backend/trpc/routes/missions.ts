@@ -1,6 +1,5 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure, protectedProcedure, mutationProcedure } from "../create-context";
 import { pgQuery } from "../../db/postgres";
 
@@ -28,6 +27,8 @@ export const missionsRouter = createTRPCRouter({
         siteId: z.string().optional(),
         status: z.string().optional(),
         assignedTo: z.string().optional(),
+        sortBy: z.enum(['scheduled_at', 'status', 'site_name', 'created_at']).optional(),
+        sortOrder: z.enum(['ASC', 'DESC']).optional(),
       }).optional()
     )
     .query(async ({ input }) => {
@@ -61,7 +62,9 @@ export const missionsRouter = createTRPCRouter({
         params.push(input.assignedTo);
       }
 
-      query += " ORDER BY m.scheduled_at DESC";
+      const sortBy = input?.sortBy || 'scheduled_at';
+      const sortOrder = input?.sortOrder || 'DESC';
+      query += ` ORDER BY m.${sortBy} ${sortOrder}`;
 
       const missions = await pgQuery<DbMission & { asset_count: string }>(query, params);
       console.log("[MISSIONS] Found missions:", missions.length);

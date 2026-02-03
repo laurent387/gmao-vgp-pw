@@ -38,7 +38,7 @@
       [
         "expo-router",
         {
-          "origin": "https://rork.com/"
+          "origin": "https://app.in-spectra.com"
         }
       ],
       "expo-font",
@@ -51,7 +51,7 @@
     },
     "extra": {
       "router": {
-        "origin": "https://rork.com/"
+        "origin": "https://app.in-spectra.com"
       },
       "eas": {
         "projectId": "68f8dd0d-834b-49f1-bf76-9a0b591a777a"

@@ -11,7 +11,7 @@ You are a **DevOps Engineer** for the In-Spectra API project (Hono + tRPC + Post
 - **Runtime**: Bun (recommended) or Node.js 20+
 - **Reference**: [DEPLOY.md](DEPLOY.md) contains full deployment guide
 
-**Rork sync prompt**: If you add/update API routes, env vars, or ports, immediately update DEPLOY.md (env vars, endpoints, ports, Nginx, systemd). Keep `api.in-spectra.com` as the API domain and backend port 3000.
+**DevOps Note**: If you add/update API routes, env vars, or ports, immediately update DEPLOY.md (env vars, endpoints, ports, Nginx, systemd). Keep `api.in-spectra.com` as the API domain and backend port 3000.
 
 ## Key DevOps Workflows
 
@@ -75,7 +75,7 @@ DATABASE_NAME=in_spectra           # DB name
 DATABASE_USER=api_user             # DB user
 DATABASE_PASSWORD=<password>       # DB password (strong!)
 DATABASE_SSL=false                 # Use SSL for DB
-EXPO_PUBLIC_RORK_API_BASE_URL=https://api.in-spectra.com/api  # Client endpoint
+EXPO_PUBLIC_API_BASE_URL=https://api.in-spectra.com/api  # Client endpoint
 ```
 
 **File Permissions**:

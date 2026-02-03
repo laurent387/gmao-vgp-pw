@@ -2,24 +2,18 @@ import { getDatabase } from '@/db/database';
 import { User, UserRole } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
-import { trpcClient } from '@/lib/trpc';
+import { webApiService } from '@/services/WebApiService';
 
 export class UserRepository extends BaseRepository<User> {
   constructor() {
     super('users');
   }
 
-  private normalize(list: any): any[] {
-    if (Array.isArray(list)) return list;
-    if (list && Array.isArray((list as any).json)) return (list as any).json as any[];
-    return [];
-  }
-
   async getByEmail(email: string): Promise<User | null> {
     if (Platform.OS === 'web') {
       try {
-        const raw = await trpcClient.auth.listUsers.query();
-        const users = this.normalize(raw);
+        const { data } = await import('@/app/api').then(m => m.getUsers());
+        const users = Array.isArray(data) ? data : [];
         const normalizedEmail = email.toLowerCase().trim();
         const user = users.find(u => u.email.toLowerCase() === normalizedEmail);
         return user ? {
@@ -31,7 +25,7 @@ export class UserRepository extends BaseRepository<User> {
           created_at: new Date().toISOString(),
         } : null;
       } catch (error) {
-        console.error('[USER_REPO] Error fetching user from backend:', error);
+        console.error('[USER_REPO] Error fetching user from API:', error);
         return null;
       }
     }
@@ -52,8 +46,8 @@ export class UserRepository extends BaseRepository<User> {
   async getByRole(role: UserRole): Promise<User[]> {
     if (Platform.OS === 'web') {
       try {
-        const raw = await trpcClient.auth.listUsers.query();
-        const users = this.normalize(raw);
+        const { data } = await import('@/app/api').then(m => m.getUsers());
+        const users = Array.isArray(data) ? data : [];
         return users
           .filter(u => u.role === role)
           .map(u => ({
@@ -65,7 +59,7 @@ export class UserRepository extends BaseRepository<User> {
             created_at: new Date().toISOString(),
           }));
       } catch (error) {
-        console.error('[USER_REPO] Error fetching users from backend:', error);
+        console.error('[USER_REPO] Error fetching users from API:', error);
         return [];
       }
     }
@@ -75,53 +69,60 @@ export class UserRepository extends BaseRepository<User> {
   }
 
   async getTechnicians(): Promise<User[]> {
-    console.log('[USER_REPO] Fetching technicians from backend');
-    try {
-      const raw = await trpcClient.auth.listTechnicians.query();
-      const users = this.normalize(raw);
-      console.log('[USER_REPO] Got technicians from backend:', Array.isArray(users) ? users.length : 'undefined');
-      return users.map(u => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role as UserRole,
-        token_mock: null,
-        created_at: new Date().toISOString(),
-      }));
-    } catch (error) {
-      console.error('[USER_REPO] Error fetching technicians from backend:', error);
-      
-      if (Platform.OS !== 'web') {
-        const db = await getDatabase();
-        return db.getAllAsync<User>("SELECT * FROM users WHERE role IN ('TECHNICIAN', 'HSE_MANAGER', 'ADMIN')");
+    console.log('[USER_REPO] Fetching technicians');
+    if (Platform.OS === 'web') {
+      try {
+        const users = await webApiService.getTechnicians();
+        console.log('[USER_REPO] Got technicians from API:', Array.isArray(users) ? users.length : 'undefined');
+        return users.map(u => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role as UserRole,
+          token_mock: null,
+          created_at: new Date().toISOString(),
+        }));
+      } catch (error) {
+        console.error('[USER_REPO] Error fetching technicians from API:', error);
+        return [];
       }
-      
+    }
+    
+    try {
+      const db = await getDatabase();
+      return db.getAllAsync<User>("SELECT * FROM users WHERE role IN ('TECHNICIAN', 'HSE_MANAGER', 'ADMIN')");
+    } catch (error) {
+      console.error('[USER_REPO] Error fetching technicians from database:', error);
       return [];
     }
   }
 
   async getAll(): Promise<User[]> {
-    console.log('[USER_REPO] Fetching all users from backend');
-    try {
-      const raw = await trpcClient.auth.listUsers.query();
-      const users = this.normalize(raw);
-      console.log('[USER_REPO] Got users from backend:', Array.isArray(users) ? users.length : 'undefined');
-      return users.map(u => ({
-        id: u.id,
-        email: u.email,
-        name: u.name,
-        role: u.role as UserRole,
-        token_mock: null,
-        created_at: new Date().toISOString(),
-      }));
-    } catch (error) {
-      console.error('[USER_REPO] Error fetching users from backend:', error);
-      
-      if (Platform.OS !== 'web') {
-        const db = await getDatabase();
-        return db.getAllAsync<User>('SELECT * FROM users');
+    console.log('[USER_REPO] Fetching all users');
+    if (Platform.OS === 'web') {
+      try {
+        const { data } = await import('@/app/api').then(m => m.getUsers());
+        const users = Array.isArray(data) ? data : [];
+        console.log('[USER_REPO] Got users from API:', users.length);
+        return users.map(u => ({
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          role: u.role as UserRole,
+          token_mock: null,
+          created_at: new Date().toISOString(),
+        }));
+      } catch (error) {
+        console.error('[USER_REPO] Error fetching users from API:', error);
+        return [];
       }
-      
+    }
+    
+    try {
+      const db = await getDatabase();
+      return db.getAllAsync<User>('SELECT * FROM users');
+    } catch (error) {
+      console.error('[USER_REPO] Error fetching users from database:', error);
       return [];
     }
   }

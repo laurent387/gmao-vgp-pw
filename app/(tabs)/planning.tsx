@@ -36,6 +36,7 @@ export default function PlanningScreen() {
 
   const [filter, setFilter] = useState<FilterType>(() => mapStatusToFilter(params.status));
   const [refreshing, setRefreshing] = useState(false);
+  const [sortConfig, setSortConfig] = useState<{ key: string; order: 'asc' | 'desc' | null } | null>(null);
 
   useEffect(() => {
     setFilter(mapStatusToFilter(params.status));
@@ -88,6 +89,36 @@ export default function PlanningScreen() {
     return items;
   }, [echeances]);
 
+  const sortedTimelineData = useMemo(() => {
+    if (!sortConfig || !sortConfig.order) return timelineData;
+
+    const key = sortConfig.key;
+    const orderMultiplier = sortConfig.order === 'asc' ? 1 : -1;
+
+    const getSortableValue = (item: TimelineItem) => {
+      const value = (item as any)[key];
+      if (value === null || value === undefined) return null;
+      if (key === 'next_due_at') return new Date(value).getTime();
+      if (typeof value === 'number') return value;
+      return String(value).toLowerCase();
+    };
+
+    return [...timelineData].sort((a, b) => {
+      const aVal = getSortableValue(a);
+      const bVal = getSortableValue(b);
+
+      if (aVal === null && bVal === null) return 0;
+      if (aVal === null) return 1;
+      if (bVal === null) return -1;
+
+      if (typeof aVal === 'number' && typeof bVal === 'number') {
+        return (aVal - bVal) * orderMultiplier;
+      }
+
+      return String(aVal).localeCompare(String(bVal)) * orderMultiplier;
+    });
+  }, [timelineData, sortConfig]);
+
   const handleRowPress = (item: TimelineItem) => {
     router.push(`/asset/${item.asset_id}`);
   };
@@ -128,7 +159,11 @@ export default function PlanningScreen() {
         sortable: true,
         render: (value: string) => {
           const date = new Date(value);
-          return date.toLocaleDateString('fr-FR');
+          return date.toLocaleDateString('fr-FR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric',
+          });
         },
       },
       {
@@ -189,8 +224,9 @@ export default function PlanningScreen() {
         {/* Table */}
         <DataTable<TimelineItem>
           columns={tableColumns}
-          data={timelineData}
+          data={sortedTimelineData}
           onRowPress={handleRowPress}
+          onSort={(key, order) => setSortConfig(order ? { key, order } : null)}
           loading={isLoading}
         />
 
@@ -286,7 +322,11 @@ export default function PlanningScreen() {
                   <View style={styles.timelineFooter}>
                     <Text style={styles.siteText}>{item.site_name}</Text>
                     <Text style={styles.dateText}>
-                      {new Date(item.next_due_at).toLocaleDateString('fr-FR')}
+                      {new Date(item.next_due_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
                     </Text>
                   </View>
                 </View>

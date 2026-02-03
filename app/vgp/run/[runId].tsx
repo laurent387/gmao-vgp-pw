@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { 
   ChevronDown, ChevronUp, Check, X, Minus, AlertTriangle, 
   MessageSquare, Save 
@@ -13,6 +13,7 @@ import { Input } from '@/components/Input';
 import { Badge } from '@/components/Badge';
 import { LoadingState } from '@/components/EmptyState';
 import { trpc } from '@/lib/trpc';
+import { apiFetch } from '@/lib/api';
 import type { VGPItemResult } from '@/types';
 
 interface RunSection {
@@ -68,6 +69,7 @@ export default function VGPRunScreen() {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [editingComment, setEditingComment] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
+  const [armedItemId, setArmedItemId] = useState<string | null>(null);
   
   // Header form state
   const [compteurType, setCompteurType] = useState('');
@@ -76,10 +78,12 @@ export default function VGPRunScreen() {
   const [particularites, setParticularites] = useState('');
   const [moyensDisposition, setMoyensDisposition] = useState(true);
 
-  const { data: run, isLoading, refetch } = trpc.vgp.getRunById.useQuery(
-    { id: runId! },
-    { enabled: !!runId }
-  );
+  // Use REST API instead of TRPC for GET request
+  const { data: run, isLoading, refetch } = useQuery({
+    queryKey: ['vgp-run', runId],
+    queryFn: () => apiFetch<RunData>(`/vgp/runs/${runId}`),
+    enabled: !!runId,
+  });
 
   // Initialize form values when run data loads
   useEffect(() => {
@@ -93,24 +97,51 @@ export default function VGPRunScreen() {
     }
   }, [run]);
 
-  const updateResultMutation = trpc.vgp.updateItemResult.useMutation({
+  const updateResultMutation = useMutation({
+    mutationFn: ({ itemId, result, comment }: { itemId: string; result: VGPItemResult; comment?: string }) => {
+      if (!runId) throw new Error('runId missing');
+      return apiFetch(`/vgp/runs/${runId}/items/${itemId}/result`, {
+        method: 'PUT',
+        body: JSON.stringify({ result, comment }),
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['vgp', 'getRunById'], { input: { id: runId } }] });
+      queryClient.invalidateQueries({ queryKey: ['vgp-run', runId] });
       refetch();
     },
   });
 
-  const updateHeaderMutation = trpc.vgp.updateRunHeader.useMutation({
+  const updateHeaderMutation = useMutation({
+    mutationFn: (payload: {
+      compteurType?: string;
+      compteurValeur?: number;
+      conditionsIntervention?: string;
+      particularites?: string;
+      moyensDisposition?: boolean;
+    }) => {
+      if (!runId) throw new Error('runId missing');
+      return apiFetch(`/vgp/runs/${runId}/header`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['vgp', 'getRunById'], { input: { id: runId } }] });
+      queryClient.invalidateQueries({ queryKey: ['vgp-run', runId] });
       Alert.alert('Succès', 'En-tête mis à jour');
       refetch();
     },
   });
 
-  const validateRunMutation = trpc.vgp.validateRun.useMutation({
+  const validateRunMutation = useMutation({
+    mutationFn: (payload: { conclusion: 'CONFORME' | 'NON_CONFORME' | 'CONFORME_SOUS_RESERVE'; signedBy?: string }) => {
+      if (!runId) throw new Error('runId missing');
+      return apiFetch(`/vgp/runs/${runId}/validate`, {
+        method: 'PUT',
+        body: JSON.stringify(payload),
+      });
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [['vgp', 'getRunById'], { input: { id: runId } }] });
+      queryClient.invalidateQueries({ queryKey: ['vgp-run', runId] });
       Alert.alert('Succès', 'Fiche validée avec succès', [
         { text: 'OK', onPress: () => router.back() }
       ]);
@@ -131,7 +162,8 @@ export default function VGPRunScreen() {
 
   const handleResultChange = useCallback((itemId: string, result: VGPItemResult) => {
     if (!runId) return;
-    updateResultMutation.mutate({ runId, itemId, result });
+    updateResultMutation.mutate({ itemId, result });
+    setArmedItemId(null);
   }, [runId, updateResultMutation]);
 
   const handleSaveComment = useCallback((itemId: string) => {
@@ -145,7 +177,6 @@ export default function VGPRunScreen() {
       ?.result?.result || 'NA';
     
     updateResultMutation.mutate({ 
-      runId, 
       itemId, 
       result: currentResult as VGPItemResult, 
       comment: commentText 
@@ -157,7 +188,6 @@ export default function VGPRunScreen() {
   const handleSaveHeader = useCallback(() => {
     if (!runId) return;
     updateHeaderMutation.mutate({
-      runId,
       compteurType: compteurType || undefined,
       compteurValeur: compteurValeur ? parseInt(compteurValeur) : undefined,
       conditionsIntervention: conditionsIntervention || undefined,
@@ -169,8 +199,9 @@ export default function VGPRunScreen() {
   const handleValidate = useCallback(() => {
     if (!run) return;
     const r = run as unknown as RunData;
+    const observations = Array.isArray(r.observations) ? r.observations : [];
     
-    const openObs = r.observations?.filter((o: RunObservation) => o.statut === 'OUVERTE').length || 0;
+    const openObs = observations.filter((o: RunObservation) => o.statut === 'OUVERTE').length || 0;
     
     Alert.alert(
       'Valider la fiche',
@@ -179,16 +210,16 @@ export default function VGPRunScreen() {
         { text: 'Annuler', style: 'cancel' },
         { 
           text: 'Conforme', 
-          onPress: () => validateRunMutation.mutate({ runId: runId!, conclusion: 'CONFORME' })
+          onPress: () => validateRunMutation.mutate({ conclusion: 'CONFORME' })
         },
         { 
           text: 'Sous réserve', 
-          onPress: () => validateRunMutation.mutate({ runId: runId!, conclusion: 'CONFORME_SOUS_RESERVE' })
+          onPress: () => validateRunMutation.mutate({ conclusion: 'CONFORME_SOUS_RESERVE' })
         },
         { 
           text: 'Non conforme', 
           style: 'destructive',
-          onPress: () => validateRunMutation.mutate({ runId: runId!, conclusion: 'NON_CONFORME' })
+          onPress: () => validateRunMutation.mutate({ conclusion: 'NON_CONFORME' })
         },
       ]
     );
@@ -207,7 +238,8 @@ export default function VGPRunScreen() {
   }
 
   const r = run as unknown as RunData;
-  const openObservationsCount = r.observations?.filter((o: RunObservation) => o.statut === 'OUVERTE').length || 0;
+  const observations = Array.isArray(r.observations) ? r.observations : [];
+  const openObservationsCount = observations.filter((o: RunObservation) => o.statut === 'OUVERTE').length || 0;
 
   return (
     <ScrollView style={styles.container}>
@@ -342,6 +374,8 @@ export default function VGPRunScreen() {
                 {section.items?.map((item: RunItem) => {
                   const currentResult = item.result?.result || 'NA';
                   const hasComment = !!item.result?.comment;
+                  const isArmed = armedItemId === item.id;
+                  const statusLabel = currentResult === 'OUI' ? 'Validé' : currentResult === 'NON' ? 'Non conforme' : 'N/A';
                   
                   return (
                     <View key={item.id} style={styles.itemRow}>
@@ -361,13 +395,24 @@ export default function VGPRunScreen() {
                       </View>
                       
                       <View style={styles.itemActions}>
+                        <View style={[
+                          styles.itemStatusBadge,
+                          currentResult === 'OUI' && styles.itemStatusOui,
+                          currentResult === 'NON' && styles.itemStatusNon,
+                          currentResult === 'NA' && styles.itemStatusNa,
+                        ]}>
+                          <Text style={styles.itemStatusText}>{statusLabel}</Text>
+                          {isArmed && <Text style={styles.itemStatusEdit}>• modif</Text>}
+                        </View>
                         {/* Result buttons */}
                         <View style={styles.resultButtons}>
                           <TouchableOpacity
                             style={[
                               styles.resultButton,
                               currentResult === 'OUI' && styles.resultButtonOui,
+                              !isArmed && styles.resultButtonDisabled,
                             ]}
+                            disabled={!isArmed}
                             onPress={() => handleResultChange(item.id, 'OUI')}
                           >
                             <Check size={16} color={currentResult === 'OUI' ? colors.textInverse : colors.success} />
@@ -377,7 +422,9 @@ export default function VGPRunScreen() {
                             style={[
                               styles.resultButton,
                               currentResult === 'NON' && styles.resultButtonNon,
+                              !isArmed && styles.resultButtonDisabled,
                             ]}
+                            disabled={!isArmed}
                             onPress={() => handleResultChange(item.id, 'NON')}
                           >
                             <X size={16} color={currentResult === 'NON' ? colors.textInverse : colors.danger} />
@@ -388,7 +435,13 @@ export default function VGPRunScreen() {
                               styles.resultButton,
                               currentResult === 'NA' && styles.resultButtonNa,
                             ]}
-                            onPress={() => handleResultChange(item.id, 'NA')}
+                            onPress={() => {
+                              if (!isArmed) {
+                                setArmedItemId(item.id);
+                                return;
+                              }
+                              handleResultChange(item.id, 'NA');
+                            }}
                           >
                             <Minus size={16} color={currentResult === 'NA' ? colors.textInverse : colors.textMuted} />
                           </TouchableOpacity>
@@ -396,7 +449,7 @@ export default function VGPRunScreen() {
                         
                         {/* Comment button */}
                         <TouchableOpacity
-                          style={styles.commentButton}
+                          style={[styles.commentButton, hasComment && styles.commentButtonActive]}
                           onPress={() => {
                             setEditingComment(item.id);
                             setCommentText(item.result?.comment || '');
@@ -653,6 +706,32 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
+  itemStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: colors.border,
+  },
+  itemStatusText: {
+    ...typography.caption,
+    color: colors.textMuted,
+  },
+  itemStatusEdit: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginLeft: spacing.xs,
+  },
+  itemStatusOui: {
+    backgroundColor: colors.successLight,
+  },
+  itemStatusNon: {
+    backgroundColor: colors.dangerLight,
+  },
+  itemStatusNa: {
+    backgroundColor: colors.border,
+  },
   resultButtons: {
     flexDirection: 'row',
     gap: spacing.xs,
@@ -665,6 +744,9 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  resultButtonDisabled: {
+    opacity: 0.5,
   },
   resultButtonOui: {
     backgroundColor: colors.success,
@@ -681,8 +763,14 @@ const styles = StyleSheet.create({
   commentButton: {
     width: 36,
     height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  commentButtonActive: {
+    borderColor: colors.primary,
   },
   commentEditor: {
     marginTop: spacing.md,

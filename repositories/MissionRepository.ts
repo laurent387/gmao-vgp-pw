@@ -1,5 +1,5 @@
 import { getDatabase } from '@/db/database';
-import { Mission, MissionStatus, Asset } from '@/types';
+import { Mission, MissionStatus, Asset, OperationType } from '@/types';
 import { BaseRepository } from './BaseRepository';
 import { Platform } from 'react-native';
 import { webApiService } from '@/services/WebApiService';
@@ -8,6 +8,8 @@ export interface MissionFilters {
   siteId?: string;
   status?: MissionStatus;
   assignedTo?: string;
+  sortBy?: 'scheduled_at' | 'status' | 'created_at';
+  sortOrder?: 'ASC' | 'DESC';
 }
 
 export class MissionRepository extends BaseRepository<Mission> {
@@ -56,8 +58,16 @@ export class MissionRepository extends BaseRepository<Mission> {
     if (conditions.length > 0) {
       query += ' WHERE ' + conditions.join(' AND ');
     }
-    
-    query += ' ORDER BY m.scheduled_at DESC';
+
+    const sortColumnMap: Record<string, string> = {
+      scheduled_at: 'm.scheduled_at',
+      status: 'm.status',
+      created_at: 'm.created_at',
+    };
+    const sortColumn = sortColumnMap[filters?.sortBy || 'scheduled_at'] || 'm.scheduled_at';
+    const sortOrder = filters?.sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+    query += ` ORDER BY ${sortColumn} ${sortOrder}`;
     
     return db.getAllAsync<Mission>(query, params);
   }
@@ -98,8 +108,22 @@ export class MissionRepository extends BaseRepository<Mission> {
     return { ...mission, assets };
   }
 
-  async create(mission: Omit<Mission, 'id' | 'created_at'>, assetIds: string[]): Promise<string> {
-    if (Platform.OS === 'web') return '';
+  async create(
+    mission: Omit<Mission, 'id' | 'created_at'>,
+    assetIds: string[],
+    technicianIds?: string[],
+    operationTypes?: (string | OperationType)[],
+    operationAssets?: Record<string, string[]>
+  ): Promise<string> {
+    if (Platform.OS === 'web') {
+      return webApiService.createMissionFull({
+        ...mission,
+        asset_ids: assetIds,
+        technician_ids: technicianIds || [],
+        operation_types: operationTypes || [],
+        operation_assets: operationAssets || {},
+      });
+    }
     
     const db = await getDatabase();
     const id = this.generateId();
@@ -110,11 +134,32 @@ export class MissionRepository extends BaseRepository<Mission> {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `, [id, mission.control_type_id, mission.scheduled_at, mission.assigned_to, mission.status, mission.site_id, now]);
     
+    // Add assets
     for (const assetId of assetIds) {
       await db.runAsync(
         'INSERT INTO mission_assets (id, mission_id, asset_id) VALUES (?, ?, ?)',
         [this.generateId(), id, assetId]
       );
+    }
+
+    // Add technicians
+    if (technicianIds && technicianIds.length > 0) {
+      for (const techId of technicianIds) {
+        await db.runAsync(
+          'INSERT INTO mission_technicians (id, mission_id, technician_id, assigned_at) VALUES (?, ?, ?, ?)',
+          [this.generateId(), id, techId, now]
+        );
+      }
+    }
+
+    // Add operations
+    if (operationTypes && operationTypes.length > 0) {
+      for (let i = 0; i < operationTypes.length; i++) {
+        await db.runAsync(
+          'INSERT INTO mission_operations (id, mission_id, operation_type, sort_order, created_at) VALUES (?, ?, ?, ?, ?)',
+          [this.generateId(), id, operationTypes[i], i, now]
+        );
+      }
     }
     
     return id;

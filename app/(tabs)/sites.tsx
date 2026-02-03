@@ -1,11 +1,15 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Building2, ChevronDown, ChevronRight, MapPin, Package } from 'lucide-react-native';
+import { Building2, ChevronDown, ChevronRight, MapPin, Package, Filter } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { Card } from '@/components/Card';
+import { DataTable, type Column } from '@/components/DataTable';
+import { DesktopFilterBar } from '@/components/DesktopFilterBar';
+import { SearchInput } from '@/components/Input';
+import { useIsDesktop } from '@/hooks/useResponsive';
 import { assetRepository } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
 import { useNavigation } from '@/lib/navigation';
@@ -20,9 +24,13 @@ type ClientRow = {
 export default function ClientSitesScreen() {
   const router = useRouter();
   const nav = useNavigation();
+  const isDesktop = useIsDesktop();
 
   const [expandedClientIds, setExpandedClientIds] = useState<Record<string, boolean>>({});
   const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [search, setSearch] = useState<string>('');
+  const [selectedClientId, setSelectedClientId] = useState<string | undefined>(undefined);
+  const [sortConfig, setSortConfig] = useState<{ key: string; order: 'asc' | 'desc' | null } | null>(null);
 
   const clientsQuery = useQuery<Client[]>({
     queryKey: ['clients'],
@@ -96,6 +104,56 @@ export default function ClientSitesScreen() {
     return map;
   }, [assetsQuery.data, sitesQuery.data]);
 
+  // Flat list of sites with client name for table view
+  const siteTableData = useMemo(() => {
+    const sites = sitesQuery.data ?? [];
+    const clients = clientsQuery.data ?? [];
+    
+    const clientById = new Map<string, Client>();
+    for (const c of clients) clientById.set(c.id, c);
+    
+    let filtered = sites.map(site => ({
+      ...site,
+      id: site.id,
+      client_name: clientById.get(site.client_id)?.name || '',
+      asset_count: assetCountBySiteId[site.id] ?? 0,
+    }));
+    
+    // Filter by client
+    if (selectedClientId) {
+      filtered = filtered.filter(s => s.client_id === selectedClientId);
+    }
+    
+    // Filter by search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      filtered = filtered.filter(s => 
+        s.name.toLowerCase().includes(q) || 
+        s.client_name.toLowerCase().includes(q) ||
+        (s.address || '').toLowerCase().includes(q)
+      );
+    }
+    
+    // Sort
+    if (sortConfig?.key && sortConfig?.order) {
+      const { key, order } = sortConfig;
+      filtered.sort((a, b) => {
+        const aVal = (a as any)[key] ?? '';
+        const bVal = (b as any)[key] ?? '';
+        if (typeof aVal === 'number' && typeof bVal === 'number') {
+          return order === 'asc' ? aVal - bVal : bVal - aVal;
+        }
+        const cmp = String(aVal).localeCompare(String(bVal));
+        return order === 'asc' ? cmp : -cmp;
+      });
+    } else {
+      // Default sort by client name then site name
+      filtered.sort((a, b) => a.client_name.localeCompare(b.client_name) || a.name.localeCompare(b.name));
+    }
+    
+    return filtered;
+  }, [sitesQuery.data, clientsQuery.data, assetCountBySiteId, selectedClientId, search, sortConfig]);
+
   const isLoading = clientsQuery.isLoading || sitesQuery.isLoading || assetsQuery.isLoading;
 
   const onRefresh = useCallback(async () => {
@@ -106,6 +164,14 @@ export default function ClientSitesScreen() {
       setRefreshing(false);
     }
   }, [clientsQuery, sitesQuery, assetsQuery]);
+
+  const handleSort = (key: string, order: 'asc' | 'desc' | null) => {
+    setSortConfig(order ? { key, order } : null);
+  };
+
+  const handleRowPress = (site: any) => {
+    router.push({ pathname: '/(tabs)/inventory', params: { siteId: site.id, clientId: site.client_id } });
+  };
 
   const toggleExpanded = useCallback((clientId: string) => {
     setExpandedClientIds((prev) => ({ ...prev, [clientId]: !prev[clientId] }));
@@ -208,6 +274,78 @@ export default function ClientSitesScreen() {
     return <LoadingState message="Chargement des sites clients..." />;
   }
 
+  // DESKTOP VIEW - TABLE
+  if (isDesktop) {
+    const tableColumns: Column<any>[] = [
+      {
+        key: 'client_name',
+        title: 'Client',
+        width: 200,
+        sortable: true,
+      },
+      {
+        key: 'name',
+        title: 'Site',
+        sortable: true,
+      },
+      {
+        key: 'address',
+        title: 'Adresse',
+        sortable: true,
+        render: (value) => value || '-',
+      },
+      {
+        key: 'asset_count',
+        title: 'Équipements',
+        width: 120,
+        sortable: true,
+        align: 'center',
+        render: (value) => (
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{value}</Text>
+          </View>
+        ),
+      },
+    ];
+
+    return (
+      <View style={styles.container} testID="client-sites-screen">
+        {/* Desktop Filter Bar */}
+        <DesktopFilterBar
+          filters={{
+            'Client': (clientsQuery.data ?? []).map(c => ({ label: c.name, value: c.id })),
+          }}
+          values={{ clientId: selectedClientId } as any}
+          onChange={(key, value) => {
+            if (key === 'clientId') setSelectedClientId(value);
+          }}
+          onClear={(key) => {
+            if (key === 'clientId') setSelectedClientId(undefined);
+          }}
+          searchValue={search}
+          onSearchChange={setSearch}
+        />
+
+        {/* Table */}
+        <DataTable<any>
+          columns={tableColumns}
+          data={siteTableData}
+          onRowPress={handleRowPress}
+          onSort={handleSort}
+          loading={isLoading}
+        />
+
+        {/* Results count */}
+        <View style={styles.desktopFooter}>
+          <Text style={styles.resultsCountText}>
+            {siteTableData.length} site{siteTableData.length !== 1 ? 's' : ''}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  // MOBILE VIEW - CARDS
   return (
     <View style={styles.container} testID="client-sites-screen">
       <FlatList
@@ -346,5 +484,28 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     color: colors.primary,
     opacity: 0.8,
+  },
+  desktopFooter: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  resultsCountText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  countBadge: {
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: borderRadius.full,
+    alignSelf: 'center',
+  },
+  countBadgeText: {
+    ...typography.caption,
+    color: colors.primary,
+    fontWeight: '600',
   },
 });

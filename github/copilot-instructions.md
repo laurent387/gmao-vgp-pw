@@ -7,7 +7,7 @@ Tu es l’assistant DevOps de ce repo. Objectif : déployer et opérer l’API `
 - Le serveur est une app Hono exportée par `backend/hono.ts`.
 - L’entrée d’exécution est `backend/server.ts`.
 - Commande principale : `bun backend/server.ts`
-- Le client mobile/web appelle l’API via `EXPO_PUBLIC_RORK_API_BASE_URL` et cible `/api/trpc`.
+- Le client mobile/web appelle l'API via `EXPO_PUBLIC_API_BASE_URL` et cible `/api/trpc`.
 
 ## Variables d’environnement (serveur)
 

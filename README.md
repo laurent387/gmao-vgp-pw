@@ -48,7 +48,7 @@ bun run start
 
 Variables côté app (exposées au client) :
 
-- `EXPO_PUBLIC_RORK_API_BASE_URL` : URL de l’API, ex. `https://api.in-spectra.com/api`
+- `EXPO_PUBLIC_API_BASE_URL` : URL de l'API, ex. `https://api.in-spectra.com/api`
 
 ## Backend API
 
@@ -83,7 +83,7 @@ Guide complet : [DEPLOY.md](DEPLOY.md)
 
 ## Dépannage
 
-- Si l’app ne charge pas : vérifier `EXPO_PUBLIC_RORK_API_BASE_URL`.
+- Si l'app ne charge pas : vérifier `EXPO_PUBLIC_API_BASE_URL`.
 - Si l’API retourne 502 : vérifier le service `in-spectra-api` et Nginx (voir [DEPLOY.md](DEPLOY.md)).
 
 ## Contribution

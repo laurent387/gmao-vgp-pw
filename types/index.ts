@@ -131,7 +131,7 @@ export interface Mission {
   id: string;
   control_type_id: string;
   scheduled_at: string;
-  assigned_to: string;
+  assigned_to?: string;
   status: MissionStatus;
   site_id: string;
   created_at: string;
@@ -139,12 +139,31 @@ export interface Mission {
   site_name?: string;
   assigned_to_name?: string;
   assets?: Asset[];
+  technicians?: MissionTechnician[];
+  operations?: MissionOperation[];
 }
 
 export interface MissionAsset {
   id: string;
   mission_id: string;
   asset_id: string;
+}
+
+export interface MissionTechnician {
+  id: string;
+  mission_id: string;
+  technician_id: string;
+  assigned_at: string;
+  user?: User;
+}
+
+export interface MissionOperation {
+  id: string;
+  mission_id: string;
+  operation_type: OperationType;
+  description?: string;
+  sort_order: number;
+  created_at: string;
 }
 
 export interface Report {

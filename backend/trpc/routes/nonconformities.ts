@@ -39,6 +39,8 @@ export const ncRouter = createTRPCRouter({
         status: z.string().optional(),
         assetId: z.string().optional(),
         severity: z.number().optional(),
+        sortBy: z.enum(['created_at', 'severity', 'status', 'asset_code']).optional(),
+        sortOrder: z.enum(['ASC', 'DESC']).optional(),
       }).optional()
     )
     .query(async ({ input }) => {
@@ -70,7 +72,9 @@ export const ncRouter = createTRPCRouter({
         params.push(input.severity);
       }
 
-      query += " ORDER BY nc.created_at DESC";
+      const sortBy = input?.sortBy || 'created_at';
+      const sortOrder = input?.sortOrder || 'DESC';
+      query += ` ORDER BY nc.${sortBy} ${sortOrder}`;
 
       const ncs = await pgQuery<DbNC>(query, params);
       console.log("[NC] Found nonconformities:", ncs.length);

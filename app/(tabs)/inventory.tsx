@@ -165,8 +165,13 @@ export default function InventoryScreen() {
   const [sortConfig, setSortConfig] = useState<{ key: string; order: 'asc' | 'desc' | null } | null>(null);
 
   const { data: assets, isLoading, refetch } = useQuery<Asset[]>({
-    queryKey: ['assets', filters, search],
-    queryFn: () => assetRepository.getAllWithDetails({ ...filters, search: search || undefined }),
+    queryKey: ['assets', filters, search, sortConfig],
+    queryFn: () => assetRepository.getAllWithDetails({
+      ...filters,
+      search: search || undefined,
+      sortBy: sortConfig?.key,
+      sortOrder: sortConfig?.order ? sortConfig.order.toUpperCase() : undefined,
+    }),
   });
 
   const { data: clients } = useQuery<Client[]>({
@@ -188,23 +193,8 @@ export default function InventoryScreen() {
   const siteList = Array.isArray(sites) ? sites : [];
   const categoryList = Array.isArray(categories) ? categories : [];
 
-  const sortedAssets = useMemo(() => {
-    if (!assets || !sortConfig) return assets;
-
-    const sorted = [...assets].sort((a, b) => {
-      const aVal = a[sortConfig.key as keyof Asset];
-      const bVal = b[sortConfig.key as keyof Asset];
-
-      if (aVal === bVal) return 0;
-      if (aVal === null || aVal === undefined) return 1;
-      if (bVal === null || bVal === undefined) return -1;
-
-      const comparison = aVal < bVal ? -1 : 1;
-      return sortConfig.order === 'asc' ? comparison : -comparison;
-    });
-
-    return sorted;
-  }, [assets, sortConfig]);
+  // Le tri est maintenant fait côté serveur, pas besoin de trier côté client
+  const sortedAssets = assets;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

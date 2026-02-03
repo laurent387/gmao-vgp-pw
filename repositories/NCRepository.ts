@@ -102,7 +102,15 @@ export class NCRepository extends BaseRepository<NonConformity> {
   }
 
   async create(nc: Omit<NonConformity, 'id' | 'created_at'>): Promise<string> {
-    if (Platform.OS === 'web') return '';
+    if (Platform.OS === 'web') {
+      return webApiService.createNC({
+        asset_id: nc.asset_id,
+        title: nc.title,
+        description: nc.description,
+        severity: nc.severity,
+        report_id: nc.report_id || undefined,
+      });
+    }
     
     const db = await getDatabase();
     const id = this.generateId();
@@ -192,7 +200,14 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
   }
 
   async create(action: Omit<CorrectiveAction, 'id'>): Promise<string> {
-    if (Platform.OS === 'web') return '';
+    if (Platform.OS === 'web') {
+      return webApiService.createAction({
+        nonconformity_id: action.nonconformity_id,
+        owner: action.owner,
+        due_at: action.due_at,
+        description: action.description || undefined,
+      });
+    }
     
     const db = await getDatabase();
     const id = this.generateId();

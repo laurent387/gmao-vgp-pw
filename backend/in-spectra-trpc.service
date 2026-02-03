@@ -1,0 +1,18 @@
+[Unit]
+Description=Hono/TRPC API In-Spectra
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=deploy
+WorkingDirectory=/home/deploy/rork-in-spectra-asset---control
+Environment=NODE_ENV=production
+Environment=PORT=3000
+Environment=HOST=0.0.0.0
+EnvironmentFile=/home/deploy/rork-in-spectra-asset---control/fastify-backend/.env
+ExecStart=/usr/bin/npx tsx backend/server.ts
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

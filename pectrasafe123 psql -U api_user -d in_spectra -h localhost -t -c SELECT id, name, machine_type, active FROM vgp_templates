@@ -1,0 +1,5 @@
+         id         |               name                | machine_type | version | active |                referentiel                 |                          metadata                           |         created_at         |         updated_at         
+--------------------+-----------------------------------+--------------+---------+--------+--------------------------------------------+-------------------------------------------------------------+----------------------------+----------------------------
+ vgp_tpl_presses_v1 | VGP Presses Plieuses Hydrauliques | PRESS        |       1 | t      | Code du travail Art. R.4323-23 à R.4323-27 | {"type": "presses_plieuses_hydrauliques", "source": "seed"} | 2026-01-26 18:58:58.907+00 | 2026-01-26 18:58:58.907+00
+(1 row)
+

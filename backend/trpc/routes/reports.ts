@@ -33,6 +33,8 @@ export const reportsRouter = createTRPCRouter({
         search: z.string().optional(),
         limit: z.number().min(1).max(100).optional(),
         offset: z.number().min(0).optional(),
+        sortBy: z.enum(['performed_at', 'conclusion', 'asset_code', 'created_at']).optional(),
+        sortOrder: z.enum(['ASC', 'DESC']).optional(),
       }).optional()
     )
     .query(async ({ input }) => {
@@ -77,7 +79,9 @@ export const reportsRouter = createTRPCRouter({
         paramIndex++;
       }
 
-      query += " ORDER BY r.performed_at DESC";
+      const sortBy = input?.sortBy || 'performed_at';
+      const sortOrder = input?.sortOrder || 'DESC';
+      query += ` ORDER BY r.${sortBy} ${sortOrder}`;
 
       if (input?.limit) {
         query += ` LIMIT $${paramIndex++}`;

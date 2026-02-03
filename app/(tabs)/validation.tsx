@@ -186,7 +186,11 @@ export default function ValidationScreen() {
                       </Text>
                     </View>
                     <Text style={styles.itemDate}>
-                      {new Date(nc.created_at).toLocaleDateString('fr-FR')}
+                      {new Date(nc.created_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -237,7 +241,11 @@ export default function ValidationScreen() {
                       styles.itemDate,
                       isOverdue(action.due_at) && styles.overdueText
                     ]}>
-                      Échéance: {new Date(action.due_at).toLocaleDateString('fr-FR')}
+                      Échéance: {new Date(action.due_at).toLocaleDateString('fr-FR', {
+                        day: '2-digit',
+                        month: '2-digit',
+                        year: 'numeric',
+                      })}
                     </Text>
                   </View>
                 </TouchableOpacity>

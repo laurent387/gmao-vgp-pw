@@ -58,13 +58,30 @@ export const assetsRouter = createTRPCRouter({
         status: z.string().optional(),
         category: z.string().optional(),
         search: z.string().optional(),
+        sortBy: z.enum(['code_interne', 'designation', 'site_name', 'created_at']).optional(),
+        sortOrder: z.enum(['ASC', 'DESC']).optional(),
       }).optional()
     )
-    .query(async ({ input }) => {
-      console.log("[ASSETS] Fetching assets with filters:", input);
+    .query(async ({ input, ctx }) => {
+      // Parse input from query string for GET requests (workaround for @hono/trpc-server)
+      let filters = input;
+      if (!filters) {
+        try {
+          const url = new URL(ctx.req.url);
+          const queryParam = url.searchParams.get("input");
+          if (queryParam) {
+            const parsed = JSON.parse(queryParam);
+            filters = parsed?.json ?? parsed;
+          }
+        } catch (e) {
+          console.warn("[ASSETS] Unable to parse query input", e);
+        }
+      }
+      
+      console.log("[ASSETS] Fetching assets with filters:", filters);
       
       let query = `
-        SELECT a.*, 
+        SELECT DISTINCT ON (a.id) a.*, 
                s.name as site_name, 
                z.name as zone_name,
                ac.next_due_at
@@ -77,29 +94,32 @@ export const assetsRouter = createTRPCRouter({
       const params: any[] = [];
       let paramIndex = 1;
 
-      if (input?.siteId) {
+      if (filters?.siteId) {
         query += ` AND a.site_id = $${paramIndex++}`;
-        params.push(input.siteId);
+        params.push(filters.siteId);
       }
-      if (input?.zoneId) {
+      if (filters?.zoneId) {
         query += ` AND a.zone_id = $${paramIndex++}`;
-        params.push(input.zoneId);
+        params.push(filters.zoneId);
       }
-      if (input?.status) {
+      if (filters?.status) {
         query += ` AND a.statut = $${paramIndex++}`;
-        params.push(input.status);
+        params.push(filters.status);
       }
-      if (input?.category) {
+      if (filters?.category) {
         query += ` AND a.categorie = $${paramIndex++}`;
-        params.push(input.category);
+        params.push(filters.category);
       }
-      if (input?.search) {
+      if (filters?.search) {
         query += ` AND (LOWER(a.code_interne) LIKE $${paramIndex} OR LOWER(a.designation) LIKE $${paramIndex})`;
-        params.push(`%${input.search.toLowerCase()}%`);
+        params.push(`%${filters.search.toLowerCase()}%`);
         paramIndex++;
       }
 
-      query += " ORDER BY a.code_interne";
+      const sortBy = filters?.sortBy || 'code_interne';
+      const sortOrder = filters?.sortOrder || 'ASC';
+      // DISTINCT ON requires ORDER BY to start with the DISTINCT column
+      query += ` ORDER BY a.id, a.${sortBy} ${sortOrder}`;
 
       const assets = await pgQuery<DbAsset>(query, params);
       console.log("[ASSETS] Found assets:", assets.length);

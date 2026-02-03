@@ -212,7 +212,11 @@ export default function ManagerDashboardScreen() {
                   </View>
                   <Text style={styles.missionType}>{mission.control_type?.label || 'VGP'}</Text>
                   <Text style={styles.missionDate}>
-                    {new Date(mission.scheduled_at).toLocaleDateString('fr-FR')}
+                    {new Date(mission.scheduled_at).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })}
                   </Text>
                 </View>
                 <ChevronRight size={20} color={colors.textMuted} />
@@ -251,7 +255,11 @@ export default function ManagerDashboardScreen() {
                   </View>
                   <Text style={styles.ncAsset}>{nc.asset?.designation || 'Équipement'}</Text>
                   <Text style={styles.ncDate}>
-                    Créée le {new Date(nc.created_at).toLocaleDateString('fr-FR')}
+                    Créée le {new Date(nc.created_at).toLocaleDateString('fr-FR', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                    })}
                   </Text>
                 </View>
                 <ChevronRight size={20} color={colors.textMuted} />

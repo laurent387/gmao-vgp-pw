@@ -1,8 +1,8 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, RefreshControl, Alert, TouchableOpacity, Platform } from 'react-native';
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight, Camera, Image as ImageIcon, Trash2, Upload, Plus } from 'lucide-react-native';
+import { AlertTriangle, User, Calendar, CheckCircle, ArrowRight, Camera, Image as ImageIcon, Trash2, Upload, Plus, Edit3, Save, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'expo-image';
@@ -14,22 +14,307 @@ import { Button } from '@/components/Button';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { ncRepository, actionRepository } from '@/repositories/NCRepository';
 import { documentRepository } from '@/repositories/DocumentRepository';
+import { webApiService } from '@/services/WebApiService';
 import { syncService } from '@/services/SyncService';
+import { attachmentService } from '@/services/AttachmentService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Document, NonConformity, ActionStatus, CorrectiveAction } from '@/types';
 import { Input } from '@/components/Input';
+import { formatDateFR, formatDateTimeFR } from '@/lib/dateUtils';
 import { Modal, TextInput } from 'react-native';
+
+// Composant séparé pour le formulaire d'action - évite les re-renders du parent
+interface ActionFormModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onSubmit: (data: { owner: string; ownerId: string; description: string; dueAt: string }) => void;
+  isLoading: boolean;
+  responsibleUsers: Array<{ id: string; name: string; email: string; role: string }> | undefined;
+}
+
+function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUsers }: ActionFormModalProps) {
+  const [owner, setOwner] = useState('');
+  const [ownerId, setOwnerId] = useState('');
+  const [description, setDescription] = useState('');
+  const [dueAt, setDueAt] = useState('');
+  const [showPicker, setShowPicker] = useState(false);
+  // Key to force re-render of TextInputs when modal opens
+  const [formKey, setFormKey] = useState(0);
+
+  // Reset form when modal becomes visible
+  React.useEffect(() => {
+    if (visible) {
+      setOwner('');
+      setOwnerId('');
+      setDescription('');
+      setDueAt('');
+      setFormKey(k => k + 1);
+    }
+  }, [visible]);
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  const handleSubmit = () => {
+    onSubmit({ owner, ownerId, description, dueAt });
+  };
+
+  // Only render when visible to avoid focus issues
+  if (!visible) return null;
+
+  return (
+    <>
+      <Modal visible={visible} transparent animationType="slide">
+        <View style={modalStyles.overlay}>
+          <View style={modalStyles.container}>
+            <Text style={modalStyles.title}>Nouvelle action corrective</Text>
+            
+            {/* Sélection du responsable */}
+            <View style={modalStyles.field}>
+              <Text style={modalStyles.label}>Responsable *</Text>
+              <TouchableOpacity 
+                style={modalStyles.selector}
+                onPress={() => setShowPicker(true)}
+              >
+                <User size={18} color={owner ? colors.primary : colors.textMuted} />
+                <Text style={[
+                  modalStyles.selectorText,
+                  !owner && modalStyles.selectorPlaceholder
+                ]}>
+                  {owner || 'Sélectionner un responsable'}
+                </Text>
+                <ArrowRight size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Description */}
+            <View style={modalStyles.field} key={`desc-${formKey}`}>
+              <Text style={modalStyles.label}>Description</Text>
+              <TextInput
+                style={[modalStyles.input, modalStyles.inputMulti]}
+                value={description}
+                onChangeText={(text) => setDescription(text)}
+                placeholder="Description de l'action à réaliser"
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Échéance */}
+            <View style={modalStyles.field} key={`due-${formKey}`}>
+              <Text style={modalStyles.label}>Échéance * (AAAA-MM-JJ)</Text>
+              <TextInput
+                style={modalStyles.input}
+                value={dueAt}
+                onChangeText={(text) => setDueAt(text)}
+                placeholder="2026-02-15"
+                placeholderTextColor={colors.textMuted}
+              />
+            </View>
+
+            <View style={modalStyles.buttons}>
+              <Button
+                title="Annuler"
+                onPress={handleClose}
+                variant="outline"
+                style={{ flex: 1 }}
+              />
+              <Button
+                title="Créer"
+                onPress={handleSubmit}
+                loading={isLoading}
+                disabled={!owner || !dueAt}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Picker pour sélectionner le responsable */}
+      <Modal visible={showPicker} transparent animationType="fade">
+        <View style={modalStyles.pickerOverlay}>
+          <View style={modalStyles.pickerContainer}>
+            <View style={modalStyles.pickerHeader}>
+              <Text style={modalStyles.pickerTitle}>Sélectionner un responsable</Text>
+              <TouchableOpacity onPress={() => setShowPicker(false)}>
+                <X size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            
+            <ScrollView style={modalStyles.pickerList}>
+              {responsibleUsers?.map((u) => (
+                <TouchableOpacity
+                  key={u.id}
+                  style={[
+                    modalStyles.pickerOption,
+                    owner === u.name && modalStyles.pickerOptionSelected,
+                  ]}
+                  onPress={() => {
+                    setOwner(u.name);
+                    setOwnerId(u.id);
+                    setShowPicker(false);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[
+                      modalStyles.pickerOptionName,
+                      owner === u.name && modalStyles.pickerOptionNameSelected,
+                    ]}>
+                      {u.name}
+                    </Text>
+                    <Text style={modalStyles.pickerOptionEmail}>{u.email}</Text>
+                  </View>
+                  {owner === u.name && (
+                    <CheckCircle size={22} color={colors.success} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
+const modalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  container: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    ...shadows.lg,
+  },
+  title: {
+    ...typography.h3,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
+  field: {
+    marginBottom: spacing.md,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500' as const,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  input: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    fontSize: 16,
+    color: colors.text,
+  },
+  inputMulti: {
+    minHeight: 80,
+    textAlignVertical: 'top' as const,
+  },
+  selector: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  selectorText: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.text,
+  },
+  selectorPlaceholder: {
+    color: colors.textMuted,
+  },
+  buttons: {
+    flexDirection: 'row' as const,
+    gap: spacing.md,
+    marginTop: spacing.lg,
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: spacing.lg,
+  },
+  pickerContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    ...shadows.md,
+  },
+  pickerHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  pickerList: {
+    padding: spacing.sm,
+  },
+  pickerOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    padding: spacing.md,
+    marginBottom: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  pickerOptionSelected: {
+    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  pickerOptionName: {
+    fontSize: 16,
+    fontWeight: '500' as const,
+    color: colors.text,
+  },
+  pickerOptionNameSelected: {
+    fontWeight: '700' as const,
+    color: colors.primary,
+  },
+  pickerOptionEmail: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+});
 
 export default function NCDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
-  const { user, canValidate, canEdit, isReadOnly } = useAuth();
+  const { user, canValidate, canEdit, isReadOnly, isAdmin } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
-  const [actionForm, setActionForm] = useState({
-    owner: '',
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: '',
     description: '',
-    due_at: '',
+    severity: 3 as 1 | 2 | 3,
+    status: 'OUVERTE' as 'OUVERTE' | 'EN_COURS' | 'CLOTUREE',
   });
 
   const { data: nc, isLoading, refetch } = useQuery<NonConformity | null>({
@@ -47,10 +332,86 @@ export default function NCDetailScreen() {
     enabled: !!id,
   });
 
-  const createActionMutation = useMutation({
+  // Fetch attachments from API (for photos uploaded via web)
+  const { data: attachments } = useQuery({
+    queryKey: ['nc-attachments', id],
+    queryFn: async () => {
+      if (!id) return [];
+      return webApiService.getAttachments('NONCONFORMITY', id);
+    },
+    enabled: !!id,
+  });
+
+  // Fetch users who can be responsible for actions
+  const { data: responsibleUsers } = useQuery({
+    queryKey: ['responsible-users'],
+    queryFn: async () => {
+      const { getResponsibleUsers } = await import('@/app/api');
+      const response = await getResponsibleUsers();
+      return response.data as Array<{ id: string; name: string; email: string; role: string }>;
+    },
+  });
+
+  // Initialize edit form when NC is loaded
+  React.useEffect(() => {
+    if (nc) {
+      setEditForm({
+        title: nc.title || '',
+        description: nc.description || '',
+        severity: nc.severity || 3,
+        status: nc.status || 'OUVERTE',
+      });
+    }
+  }, [nc]);
+
+  // Mutation to update NC (admin only)
+  const updateNCMutation = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('NC inconnue');
-      if (!actionForm.owner || !actionForm.due_at) throw new Error('Responsable et échéance requis');
+      if (!editForm.title.trim()) throw new Error('Le titre est requis');
+
+      // Update via API
+      if (Platform.OS === 'web') {
+        await webApiService.updateNC(id, {
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          severity: editForm.severity,
+          status: editForm.status,
+        });
+      } else {
+        // Update local database
+        await ncRepository.update(id, {
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          severity: editForm.severity,
+          status: editForm.status,
+        });
+        // Sync to server
+        await syncService.addToOutbox('UPDATE_NC', {
+          id,
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          severity: editForm.severity,
+          status: editForm.status,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nc', id] });
+      queryClient.invalidateQueries({ queryKey: ['nonconformities'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
+      setIsEditing(false);
+      Alert.alert('Succès', 'Non-conformité mise à jour');
+    },
+    onError: (error) => {
+      Alert.alert('Erreur', error instanceof Error ? error.message : 'Erreur lors de la mise à jour');
+    },
+  });
+
+  const createActionMutation = useMutation({
+    mutationFn: async (data: { owner: string; ownerId: string; description: string; dueAt: string }) => {
+      if (!id) throw new Error('NC inconnue');
+      if (!data.owner || !data.dueAt) throw new Error('Responsable et échéance requis');
 
       const actionId = `action-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const now = new Date().toISOString();
@@ -58,9 +419,9 @@ export default function NCDetailScreen() {
       const newAction: CorrectiveAction = {
         id: actionId,
         nonconformity_id: id,
-        owner: actionForm.owner,
-        description: actionForm.description,
-        due_at: actionForm.due_at,
+        owner: data.owner,
+        description: data.description,
+        due_at: data.dueAt,
         status: 'OUVERTE',
         closed_at: null,
         validated_by: null,
@@ -86,7 +447,6 @@ export default function NCDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['nonconformities'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-kpis'] });
       setShowActionModal(false);
-      setActionForm({ owner: '', description: '', due_at: '' });
       Alert.alert('Succès', 'Action corrective créée');
     },
     onError: (error) => {
@@ -132,24 +492,27 @@ export default function NCDetailScreen() {
   };
 
   const formatDate = (date: string | null) => {
-    if (!date) return '-';
-    return new Date(date).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    });
+    return formatDateFR(date);
   };
 
   const action = nc?.corrective_action;
 
+  // Combine local documents and API attachments for photos
   const photoDocs = useMemo(() => {
-    return (documents ?? []).filter((d) => d.mime.startsWith('image/'));
+    const localPhotos = (documents ?? []).filter((d) => d.mime.startsWith('image/'));
+    return localPhotos;
   }, [documents]);
+
+  // API attachments (photos uploaded via web)
+  const apiPhotos = useMemo(() => {
+    if (!attachments) return [];
+    return attachments.filter((a: any) => a.file_type === 'IMAGE');
+  }, [attachments]);
 
   const resolveImageUri = useCallback(
     (doc: Document): string => {
       if (doc.server_url) {
-        const base = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || '';
+        const base = process.env.EXPO_PUBLIC_API_BASE_URL || '';
         if (doc.server_url.startsWith('http')) return doc.server_url;
         if (base) return `${base}${doc.server_url}`;
       }
@@ -205,11 +568,38 @@ export default function NCDetailScreen() {
     mutationFn: async () => {
       if (!id) throw new Error('NC inconnue');
 
-      if (Platform.OS !== 'web') {
-        const perm = await ImagePicker.requestCameraPermissionsAsync();
-        if (perm.status !== 'granted') {
-          throw new Error('Permission caméra refusée');
+      // Use AttachmentService for web platform
+      if (Platform.OS === 'web') {
+        // Take photo or pick from gallery
+        const photo = await attachmentService.takePhoto();
+        if (!photo) {
+          throw new Error('Capture annulée');
         }
+
+        // Upload directly to API
+        const today = new Date().toLocaleDateString('fr-FR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+        });
+        const result = await attachmentService.upload(
+          photo.uri,
+          `photo_${Date.now()}.jpg`,
+          'image/jpeg',
+          'NONCONFORMITY',
+          id,
+          'PHOTO',
+          `Photo NC ${today}`,
+          false
+        );
+
+        return { documentId: result.id };
+      }
+
+      // Native platform - use local storage
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (perm.status !== 'granted') {
+        throw new Error('Permission caméra refusée');
       }
 
       const result = await ImagePicker.launchCameraAsync({
@@ -223,12 +613,6 @@ export default function NCDetailScreen() {
       }
 
       const srcUri = result.assets[0].uri;
-
-      if (Platform.OS === 'web') {
-        const docId = `web-doc-${Date.now()}`;
-        await syncService.addToOutbox('UPLOAD_DOCUMENT', { documentId: docId });
-        return { documentId: docId };
-      }
 
       const photosDir = `${FileSystem.Paths.document.uri}photos`;
       const dirInfo = await FileSystem.getInfoAsync(photosDir);
@@ -256,6 +640,7 @@ export default function NCDetailScreen() {
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['nc-documents', id] });
+      await queryClient.invalidateQueries({ queryKey: ['nc-attachments', id] });
       await queryClient.invalidateQueries({ queryKey: ['outbox-pending-count'] });
       await queryClient.invalidateQueries({ queryKey: ['outbox'] });
     },
@@ -298,26 +683,153 @@ export default function NCDetailScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
       >
         <View style={styles.header}>
-          <View style={styles.headerTop}>
-            <AlertTriangle size={24} color={colors.danger} />
-            <CriticalityBadge level={nc?.severity ?? 3} />
-            <StatusBadge status={nc?.status ?? 'OUVERTE'} />
-          </View>
-          <Text style={styles.title}>{nc?.title ?? ''}</Text>
-          {(nc as any).asset_code && (
-            <Text style={styles.assetInfo}>
-              Équipement: {(nc as any).asset_code} - {(nc as any).asset_designation}
-            </Text>
+          {/* Admin edit button */}
+          {isAdmin() && !isEditing && (
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => setIsEditing(true)}
+            >
+              <Edit3 size={18} color={colors.primary} />
+              <Text style={styles.editButtonText}>Modifier</Text>
+            </TouchableOpacity>
           )}
-          <Text style={styles.date}>Créée le {formatDate(nc?.created_at ?? null)}</Text>
+
+          {isEditing ? (
+            <>
+              {/* Edit mode */}
+              <View style={styles.editHeader}>
+                <Text style={styles.editHeaderTitle}>Mode édition</Text>
+                <View style={styles.editActions}>
+                  <TouchableOpacity 
+                    style={styles.cancelButton}
+                    onPress={() => {
+                      setIsEditing(false);
+                      if (nc) {
+                        setEditForm({
+                          title: nc.title || '',
+                          description: nc.description || '',
+                          severity: nc.severity || 3,
+                          status: nc.status || 'OUVERTE',
+                        });
+                      }
+                    }}
+                  >
+                    <X size={18} color={colors.danger} />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.saveButton}
+                    onPress={() => updateNCMutation.mutate()}
+                    disabled={updateNCMutation.isPending}
+                  >
+                    <Save size={18} color={colors.success} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Title input */}
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Titre</Text>
+                <TextInput
+                  style={styles.editInput}
+                  value={editForm.title}
+                  onChangeText={(text) => setEditForm(prev => ({ ...prev, title: text }))}
+                  placeholder="Titre de la NC"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+
+              {/* Severity selector */}
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Criticité</Text>
+                <View style={styles.severitySelector}>
+                  {([1, 2, 3] as const).map((level) => (
+                    <TouchableOpacity
+                      key={level}
+                      style={[
+                        styles.severityOption,
+                        editForm.severity === level && styles.severityOptionSelected,
+                        level === 1 && styles.severityHigh,
+                        level === 2 && styles.severityMedium,
+                        level === 3 && styles.severityLow,
+                      ]}
+                      onPress={() => setEditForm(prev => ({ ...prev, severity: level }))}
+                    >
+                      <Text style={[
+                        styles.severityOptionText,
+                        editForm.severity === level && styles.severityOptionTextSelected,
+                      ]}>
+                        {level === 1 ? 'Critique' : level === 2 ? 'Majeure' : 'Mineure'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Status selector */}
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Statut</Text>
+                <View style={styles.statusSelector}>
+                  {(['OUVERTE', 'EN_COURS', 'CLOTUREE'] as const).map((status) => (
+                    <TouchableOpacity
+                      key={status}
+                      style={[
+                        styles.statusOption,
+                        editForm.status === status && styles.statusOptionSelected,
+                      ]}
+                      onPress={() => setEditForm(prev => ({ ...prev, status }))}
+                    >
+                      <Text style={[
+                        styles.statusOptionText,
+                        editForm.status === status && styles.statusOptionTextSelected,
+                      ]}>
+                        {status === 'OUVERTE' ? 'Ouverte' : status === 'EN_COURS' ? 'En cours' : 'Clôturée'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Description input */}
+              <View style={styles.editField}>
+                <Text style={styles.editLabel}>Description</Text>
+                <TextInput
+                  style={[styles.editInput, styles.editTextarea]}
+                  value={editForm.description}
+                  onChangeText={(text) => setEditForm(prev => ({ ...prev, description: text }))}
+                  placeholder="Description de la non-conformité"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </>
+          ) : (
+            <>
+              {/* Display mode */}
+              <View style={styles.headerTop}>
+                <AlertTriangle size={24} color={colors.danger} />
+                <CriticalityBadge level={nc?.severity ?? 3} />
+                <StatusBadge status={nc?.status ?? 'OUVERTE'} />
+              </View>
+              <Text style={styles.title}>{nc?.title ?? ''}</Text>
+              {(nc as any).asset_code && (
+                <Text style={styles.assetInfo}>
+                  Équipement: {(nc as any).asset_code} - {(nc as any).asset_designation}
+                </Text>
+              )}
+              <Text style={styles.date}>Créée le {formatDate(nc?.created_at ?? null)}</Text>
+            </>
+          )}
         </View>
 
         <View style={styles.content}>
+          {!isEditing && (
           <SectionCard title="Description">
             <Text style={styles.description}>
               {nc?.description || 'Aucune description'}
             </Text>
           </SectionCard>
+          )}
 
           <SectionCard
             title="Photos"
@@ -333,7 +845,7 @@ export default function NCDetailScreen() {
               </TouchableOpacity>
             }
           >
-            {photoDocs.length === 0 ? (
+            {photoDocs.length === 0 && apiPhotos.length === 0 ? (
               <View style={styles.photoEmpty}>
                 <ImageIcon size={18} color={colors.textMuted} />
                 <Text style={styles.photoEmptyText}>Aucune photo</Text>
@@ -343,6 +855,23 @@ export default function NCDetailScreen() {
               </View>
             ) : (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.photoRow}>
+                {/* Photos de l'API (attachments) */}
+                {apiPhotos.map((att: any) => {
+                  const uri = `https://api.in-spectra.com/uploads/${att.storage_key}`;
+                  return (
+                    <View key={att.id} style={styles.photoCard}>
+                      <Image source={{ uri }} style={styles.photo} contentFit="cover" />
+                      <View style={styles.photoMeta}>
+                        <View style={styles.photoMetaLeft}>
+                          <Text style={styles.photoMetaText} numberOfLines={1}>
+                            Synchronisée
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+                {/* Photos locales (documents) */}
                 {photoDocs.map((doc) => {
                   const uri = resolveImageUri(doc);
                   return (
@@ -447,66 +976,14 @@ export default function NCDetailScreen() {
             </View>
           )}
 
-          <Modal visible={showActionModal} transparent animationType="slide">
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContainer}>
-                <Text style={styles.modalTitle}>Nouvelle action corrective</Text>
-                
-                <View style={styles.modalField}>
-                  <Text style={styles.modalLabel}>Responsable *</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={actionForm.owner}
-                    onChangeText={(text) => setActionForm({ ...actionForm, owner: text })}
-                    placeholder="Nom du responsable"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-
-                <View style={styles.modalField}>
-                  <Text style={styles.modalLabel}>Description</Text>
-                  <TextInput
-                    style={[styles.modalInput, styles.modalInputMulti]}
-                    value={actionForm.description}
-                    onChangeText={(text) => setActionForm({ ...actionForm, description: text })}
-                    placeholder="Description de l'action à réaliser"
-                    placeholderTextColor={colors.textMuted}
-                    multiline
-                    numberOfLines={3}
-                  />
-                </View>
-
-                <View style={styles.modalField}>
-                  <Text style={styles.modalLabel}>Échéance * (AAAA-MM-JJ)</Text>
-                  <TextInput
-                    style={styles.modalInput}
-                    value={actionForm.due_at}
-                    onChangeText={(text) => setActionForm({ ...actionForm, due_at: text })}
-                    placeholder="2025-02-15"
-                    placeholderTextColor={colors.textMuted}
-                  />
-                </View>
-
-                <View style={styles.modalButtons}>
-                  <Button
-                    title="Annuler"
-                    onPress={() => {
-                      setShowActionModal(false);
-                      setActionForm({ owner: '', description: '', due_at: '' });
-                    }}
-                    variant="outline"
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Créer"
-                    onPress={() => createActionMutation.mutate()}
-                    loading={createActionMutation.isPending}
-                    style={{ flex: 1 }}
-                  />
-                </View>
-              </View>
-            </View>
-          </Modal>
+          {/* Modal de création d'action corrective - composant séparé pour éviter les re-renders */}
+          <ActionFormModal
+            visible={showActionModal}
+            onClose={() => setShowActionModal(false)}
+            onSubmit={(data) => createActionMutation.mutate(data)}
+            isLoading={createActionMutation.isPending}
+            responsibleUsers={responsibleUsers}
+          />
         </View>
       </ScrollView>
       )}
@@ -741,5 +1218,221 @@ const styles = StyleSheet.create({
     flexDirection: 'row' as const,
     gap: spacing.md,
     marginTop: spacing.lg,
+  },
+  // Edit mode styles
+  editButton: {
+    position: 'absolute' as const,
+    top: spacing.md,
+    right: spacing.md,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceAlt,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.full,
+    zIndex: 10,
+  },
+  editButtonText: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '600' as const,
+    color: colors.primary,
+  },
+  editHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    marginBottom: spacing.lg,
+  },
+  editHeaderTitle: {
+    ...typography.h3,
+    color: colors.primary,
+  },
+  editActions: {
+    flexDirection: 'row' as const,
+    gap: spacing.md,
+  },
+  cancelButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.dangerLight,
+    borderRadius: borderRadius.full,
+  },
+  saveButton: {
+    padding: spacing.sm,
+    backgroundColor: colors.successLight,
+    borderRadius: borderRadius.full,
+  },
+  editField: {
+    marginBottom: spacing.md,
+  },
+  editLabel: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '600' as const,
+    color: colors.textSecondary,
+    marginBottom: spacing.xs,
+  },
+  editInput: {
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+  },
+  editTextarea: {
+    minHeight: 100,
+    textAlignVertical: 'top' as const,
+  },
+  severitySelector: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+  },
+  severityOption: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: 'center' as const,
+  },
+  severityOptionSelected: {
+    borderWidth: 2,
+  },
+  severityHigh: {
+    borderColor: colors.danger,
+  },
+  severityMedium: {
+    borderColor: colors.warning,
+  },
+  severityLow: {
+    borderColor: colors.success,
+  },
+  severityOptionText: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '500' as const,
+    color: colors.textSecondary,
+  },
+  severityOptionTextSelected: {
+    fontWeight: '700' as const,
+    color: colors.text,
+  },
+  statusSelector: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+  },
+  statusOption: {
+    flex: 1,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surfaceAlt,
+  },
+  statusOptionSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  statusOptionText: {
+    fontSize: typography.bodySmall.fontSize,
+    fontWeight: '500' as const,
+    color: colors.textSecondary,
+  },
+  statusOptionTextSelected: {
+    color: colors.textInverse,
+    fontWeight: '700' as const,
+  },
+  // Responsible selector button style
+  responsibleSelector: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  responsibleSelectorText: {
+    flex: 1,
+    fontSize: typography.body.fontSize,
+    color: colors.text,
+  },
+  responsibleSelectorPlaceholder: {
+    color: colors.textMuted,
+  },
+  // Picker modal styles
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    padding: spacing.lg,
+  },
+  pickerContainer: {
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    width: '100%',
+    maxWidth: 400,
+    maxHeight: '70%',
+    ...shadows.md,
+  },
+  pickerHeader: {
+    flexDirection: 'row' as const,
+    justifyContent: 'space-between' as const,
+    alignItems: 'center' as const,
+    padding: spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  pickerTitle: {
+    ...typography.h3,
+    color: colors.text,
+  },
+  pickerCloseBtn: {
+    padding: spacing.xs,
+  },
+  pickerList: {
+    padding: spacing.sm,
+  },
+  pickerOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
+    padding: spacing.md,
+    marginBottom: spacing.xs,
+    borderRadius: borderRadius.md,
+    backgroundColor: colors.surfaceAlt,
+  },
+  pickerOptionSelected: {
+    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  pickerOptionContent: {
+    flex: 1,
+  },
+  pickerOptionName: {
+    fontSize: typography.body.fontSize,
+    fontWeight: '500' as const,
+    color: colors.text,
+  },
+  pickerOptionNameSelected: {
+    fontWeight: '700' as const,
+    color: colors.primary,
+  },
+  pickerOptionEmail: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  noUsersText: {
+    padding: spacing.lg,
+    textAlign: 'center' as const,
+    color: colors.textMuted,
+    fontStyle: 'italic' as const,
   },
 });

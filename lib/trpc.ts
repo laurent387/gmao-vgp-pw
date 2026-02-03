@@ -9,10 +9,10 @@ import type { AppRouter } from "@/backend/trpc/app-router";
 export const trpc = createTRPCReact<AppRouter>();
 
 const getBaseUrl = () => {
-  const url = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  const url = process.env.EXPO_PUBLIC_API_BASE_URL;
 
   if (!url) {
-    console.warn("EXPO_PUBLIC_RORK_API_BASE_URL not set, using production fallback");
+    console.warn("EXPO_PUBLIC_API_BASE_URL not set, using production fallback");
     return "https://api.in-spectra.com";
   }
 
@@ -68,27 +68,20 @@ function getAuthToken(): string | null {
 const baseUrl = getBaseUrl();
 console.log(`[TRPC] Using API base URL: ${baseUrl}`);
 
+// For queries, we need GET with methodOverride
+// For mutations, we use POST with body
+// httpLink with methodOverride: 'GET' sends queries as GET but queries may have large inputs
+// The better approach: use standard POST for everything since the backend accepts it
 export const trpcClient = trpc.createClient({
   transformer: superjson,
   links: [
     httpLink({
       url: `${baseUrl}/api/trpc`,
-      methodOverride: 'POST', // Use POST for all requests to avoid GET query param issues
       headers: () => {
         const token = getAuthToken();
         return token ? { Authorization: `Bearer ${token}` } : {};
       },
-      // Custom fetch to log outgoing requests and network errors
-      fetch: async (input, init) => {
-        const url = typeof input === "string" ? input : input.toString();
-        console.log(`[TRPC] Fetching: ${url}`);
-        try {
-          return await fetch(input, init);
-        } catch (err) {
-          console.error(`[TRPC] Network error: ${url}`, err);
-          throw err;
-        }
-      },
+      // Standard TRPC behavior: GET for queries, POST for mutations
     }),
   ],
 });

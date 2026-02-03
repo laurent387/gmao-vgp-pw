@@ -1,6 +1,7 @@
 import { trpcServer } from "@hono/trpc-server";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
+import { bodyLimit } from "hono/body-limit";
 import { randomUUID } from "crypto";
 import { mkdir, writeFile, readFile } from "fs/promises";
 import path from "path";
@@ -29,9 +30,8 @@ const isAllowedOrigin = (origin: string | undefined | null): boolean => {
 
   try {
     const url = new URL(origin);
-    if (url.hostname.endsWith('.rorktest.dev')) return true;
-    if (url.hostname.endsWith('.rork.app')) return true;
     if (url.hostname.endsWith('.expo.dev')) return true;
+    if (url.hostname.startsWith('exp://')) return true;
   } catch {
     return false;
   }
@@ -59,17 +59,29 @@ app.use(
   })
 );
 
-const trpcHandler = trpcServer({
-  endpoint: "/api/trpc",
-  router: appRouter,
-  createContext,
-  onError: ({ path, error }) => {
-    console.error(`[TRPC] Error on ${path}:`, error);
-  },
-});
+// Body parsing middleware for TRPC mutations
+app.use('/api/trpc/*', bodyLimit({ maxSize: 10 * 1024 * 1024 })); // 10MB limit
 
-app.use("/api/trpc/*", trpcHandler);
-app.use("/trpc/*", trpcHandler);
+// Register TRPC endpoints
+app.use(
+  "/api/trpc/*",
+  trpcServer({
+    router: appRouter,
+    createContext,
+    onError: ({ path, error }) => {
+      console.error(`[TRPC] Error on ${path}:`, error);
+    },
+  })
+);
+
+// Also register under /trpc for backward compatibility
+app.use(
+  "/trpc/*", 
+  trpcServer({
+    router: appRouter,
+    createContext,
+  })
+);
 
 app.get("/", (c) => {
   return c.json({ status: "ok", message: "In-Spectra API is running" });

@@ -13,7 +13,7 @@ import {
   AttachmentFileType,
 } from '@/types';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_RORK_API_BASE_URL || 'https://api.in-spectra.com/api';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.in-spectra.com';
 
 // File size limits (same as backend)
 export const FILE_SIZE_LIMITS = {
@@ -246,7 +246,7 @@ class AttachmentService {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/attachments/upload`, {
+      const response = await fetch(`${API_BASE_URL}/attachments/upload`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${this.authToken}`,

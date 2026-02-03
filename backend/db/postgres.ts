@@ -159,6 +159,23 @@ export async function ensurePgSchema(): Promise<void> {
       asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE RESTRICT
     );
 
+    CREATE TABLE IF NOT EXISTS mission_technicians (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+      technician_id TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      assigned_at TIMESTAMPTZ NOT NULL,
+      UNIQUE(mission_id, technician_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_operations (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+      operation_type TEXT NOT NULL,
+      description TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
       mission_id TEXT NOT NULL REFERENCES missions(id) ON DELETE CASCADE,

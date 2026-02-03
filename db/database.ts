@@ -136,6 +136,26 @@ export async function initializeDatabase(): Promise<void> {
       FOREIGN KEY (asset_id) REFERENCES assets(id)
     );
 
+    CREATE TABLE IF NOT EXISTS mission_technicians (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      technician_id TEXT NOT NULL,
+      assigned_at TEXT NOT NULL,
+      FOREIGN KEY (mission_id) REFERENCES missions(id),
+      FOREIGN KEY (technician_id) REFERENCES users(id),
+      UNIQUE(mission_id, technician_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_operations (
+      id TEXT PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      operation_type TEXT NOT NULL,
+      description TEXT,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      FOREIGN KEY (mission_id) REFERENCES missions(id)
+    );
+
     CREATE TABLE IF NOT EXISTS reports (
       id TEXT PRIMARY KEY,
       mission_id TEXT NOT NULL,

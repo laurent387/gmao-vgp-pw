@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import { colors, spacing, borderRadius, shadows, typography } from '@/constants/theme';
 import { StatusBadge, OverdueBadge, CriticalityBadge } from './Badge';
+import { formatDateFR } from '@/lib/dateUtils';
 
 interface AssetListItemProps {
   code: string;
@@ -124,11 +125,7 @@ export function MissionListItem({
   onPress,
 }: MissionListItemProps) {
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-    });
+    return formatDateFR(date);
   };
 
   return (
@@ -173,10 +170,7 @@ export function NCListItem({
   onPress,
 }: NCListItemProps) {
   const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('fr-FR', {
-      day: 'numeric',
-      month: 'short',
-    });
+    return formatDateFR(date);
   };
 
   return (

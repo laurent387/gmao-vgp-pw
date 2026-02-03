@@ -103,7 +103,6 @@ export default function DashboardScreen() {
             value={kpis?.openNCs ?? 0}
             variant={kpis?.openNCs ? 'danger' : 'success'}
             icon={<AlertTriangle size={24} color={kpis?.openNCs ? colors.danger : colors.success} />}
-            onPress={() => router.push('/(tabs)/nc')}
           />
         </View>
 

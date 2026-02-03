@@ -73,8 +73,6 @@ export const routes = {
   
   sites: () => '/(tabs)/sites',
   dashboard: () => '/(tabs)',
-  missions: () => '/(tabs)/missions',
-  nc: () => '/(tabs)/nc',
   admin: () => '/(tabs)/admin',
   sync: () => '/(tabs)/sync',
 };
@@ -102,8 +100,6 @@ export const useNavigation = () => {
       router.push(routes.planning(status, assetId) as any),
     goToSites: () => router.push(routes.sites() as any),
     goToDashboard: () => router.push(routes.dashboard() as any),
-    goToMissions: () => router.push(routes.missions() as any),
-    goToNCList: () => router.push(routes.nc() as any),
     goToAdmin: () => router.push(routes.admin() as any),
     goToSync: () => router.push(routes.sync() as any),
     

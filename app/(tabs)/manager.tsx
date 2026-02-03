@@ -160,21 +160,18 @@ export default function ManagerDashboardScreen() {
             value={stats?.plannedMissions ?? 0}
             variant="default"
             icon={<Clock size={24} color={colors.primary} />}
-            onPress={() => router.push('/(tabs)/missions')}
           />
           <KPICard
             title="En cours"
             value={stats?.inProgressMissions ?? 0}
             variant="warning"
             icon={<ClipboardCheck size={24} color={colors.warning} />}
-            onPress={() => router.push('/(tabs)/missions')}
           />
           <KPICard
             title="NC ouvertes"
             value={stats?.openNCs ?? 0}
             variant={stats?.openNCs ? 'danger' : 'success'}
             icon={<AlertTriangle size={24} color={stats?.openNCs ? colors.danger : colors.success} />}
-            onPress={() => router.push('/(tabs)/nc')}
           />
           <KPICard
             title="Actions en retard"
@@ -188,10 +185,6 @@ export default function ManagerDashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Activité récente</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/missions')} style={styles.seeAllButton}>
-              <Text style={styles.seeAllText}>Voir tout</Text>
-              <ChevronRight size={16} color={colors.primary} />
-            </TouchableOpacity>
           </View>
 
           {recentMissions && recentMissions.length > 0 ? (
@@ -233,10 +226,6 @@ export default function ManagerDashboardScreen() {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>NC à traiter</Text>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/nc')} style={styles.seeAllButton}>
-              <Text style={styles.seeAllText}>Voir tout</Text>
-              <ChevronRight size={16} color={colors.primary} />
-            </TouchableOpacity>
           </View>
 
           {openNCs && openNCs.length > 0 ? (

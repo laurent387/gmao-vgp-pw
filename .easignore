@@ -1,0 +1,38 @@
+# Backend files - not needed for mobile build
+fastify-backend/
+backend/
+docker/
+docker-compose.yml
+
+# Node modules
+node_modules/
+
+# Build outputs
+dist/
+build/
+web-dist/
+.expo/
+
+# Docker and deployment
+Dockerfile*
+*.sh
+DOCKER.md
+DEPLOY.md
+BUILD_ANDROID.md
+
+# Database and backups
+backups/
+uploads/
+
+# CI/CD
+.github/
+
+# Docs
+docs/
+*.md
+!README.md
+
+# Misc
+.git/
+.vscode/
+.worktrees/

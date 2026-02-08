@@ -10,15 +10,20 @@ import {
   Alert,
   Platform,
   Switch,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { User, Mail, Lock, LogOut, Save, ArrowLeft, Send, Pencil, Users, Shield } from 'lucide-react-native';
+import { Image } from 'expo-image';
+import * as Clipboard from 'expo-clipboard';
+import QRCode from 'react-native-qrcode-svg';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { colors, spacing, borderRadius } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { trpc } from '@/lib/trpc';
 import { useNavigation } from '@/lib/navigation';
 import { trackEvent } from '@/lib/analytics';
+import { BusinessCard } from '@/types';
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -32,6 +37,19 @@ export default function ProfileScreen() {
   const [isSendingReset, setIsSendingReset] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [showQr, setShowQr] = useState(false);
+  const [cardForm, setCardForm] = useState({
+    firstName: '',
+    lastName: '',
+    jobTitle: '',
+    photoUrl: '',
+    email: '',
+    phone: '',
+    isEmailPublic: false,
+    isPhonePublic: false,
+  });
+
+  const publicBaseUrl = process.env.EXPO_PUBLIC_WEB_BASE_URL || 'https://app.in-spectra.com';
 
   // Query all users for admin section
   const { data: allUsers, refetch: refetchUsers } = useQuery({
@@ -68,12 +86,92 @@ export default function ProfileScreen() {
   const updateProfileMutation = trpc.auth.updateProfile.useMutation();
   const requestPasswordResetMutation = trpc.auth.requestPasswordReset.useMutation();
 
+  const {
+    data: businessCard,
+    isLoading: isLoadingBusinessCard,
+    refetch: refetchBusinessCard,
+  } = useQuery<BusinessCard>({
+    queryKey: ['business-card'],
+    queryFn: async () => {
+      const { getMyBusinessCard } = await import('@/app/api');
+      const response = await getMyBusinessCard();
+      return response.data as BusinessCard;
+    },
+  });
+
+  const updateBusinessCardMutation = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => {
+      const { updateMyBusinessCard } = await import('@/app/api');
+      const response = await updateMyBusinessCard(payload);
+      return response.data as BusinessCard;
+    },
+    onSuccess: (data) => {
+      setCardForm({
+        firstName: data.firstName || '',
+        lastName: data.lastName || '',
+        jobTitle: data.jobTitle || '',
+        photoUrl: data.photoUrl || '',
+        email: data.email || '',
+        phone: data.phone || '',
+        isEmailPublic: data.isEmailPublic,
+        isPhonePublic: data.isPhonePublic,
+      });
+      refetchBusinessCard();
+    },
+    onError: (error: any) => {
+      Alert.alert('Erreur', error?.message || 'Impossible de mettre a jour la carte');
+    },
+  });
+
+  const rotateBusinessCardMutation = useMutation({
+    mutationFn: async () => {
+      const { rotateMyBusinessCardToken } = await import('@/app/api');
+      const response = await rotateMyBusinessCardToken();
+      return response.data as BusinessCard;
+    },
+    onSuccess: () => {
+      refetchBusinessCard();
+    },
+    onError: (error: any) => {
+      Alert.alert('Erreur', error?.message || 'Impossible de regenerer le lien');
+    },
+  });
+
+  const disableBusinessCardMutation = useMutation({
+    mutationFn: async () => {
+      const { disableMyBusinessCardPublic } = await import('@/app/api');
+      const response = await disableMyBusinessCardPublic();
+      return response.data as BusinessCard;
+    },
+    onSuccess: () => {
+      refetchBusinessCard();
+    },
+    onError: (error: any) => {
+      Alert.alert('Erreur', error?.message || 'Impossible de desactiver le lien');
+    },
+  });
+
   useEffect(() => {
     if (user) {
       setName(user.name);
       setEmail(user.email);
     }
   }, [user]);
+
+  useEffect(() => {
+    if (businessCard) {
+      setCardForm({
+        firstName: businessCard.firstName || '',
+        lastName: businessCard.lastName || '',
+        jobTitle: businessCard.jobTitle || '',
+        photoUrl: businessCard.photoUrl || '',
+        email: businessCard.email || '',
+        phone: businessCard.phone || '',
+        isEmailPublic: businessCard.isEmailPublic,
+        isPhonePublic: businessCard.isPhonePublic,
+      });
+    }
+  }, [businessCard]);
 
   const handleSaveProfile = async () => {
     if (!name.trim()) {
@@ -156,6 +254,60 @@ export default function ProfileScreen() {
   const performLogout = async () => {
     await logout();
     router.replace('/login');
+  };
+
+  const publicLink = (businessCard?.publicEnabled && businessCard.publicToken)
+    ? `${publicBaseUrl.replace(/\/$/, '')}/u/${businessCard.publicToken}`
+    : '';
+
+  const handleSaveBusinessCard = async () => {
+    updateBusinessCardMutation.mutate({
+      firstName: cardForm.firstName,
+      lastName: cardForm.lastName,
+      jobTitle: cardForm.jobTitle,
+      photoUrl: cardForm.photoUrl,
+      email: cardForm.email,
+      phone: cardForm.phone,
+      isEmailPublic: cardForm.isEmailPublic,
+      isPhonePublic: cardForm.isPhonePublic,
+    });
+  };
+
+  const handleCopyBusinessLink = async () => {
+    if (!publicLink) {
+      Alert.alert('Lien indisponible', 'Activez le lien public pour generer un lien.');
+      return;
+    }
+    await Clipboard.setStringAsync(publicLink);
+    Alert.alert('Lien copie', 'Le lien public a ete copie dans le presse-papiers.');
+  };
+
+  const handleTogglePublicLink = (value: boolean) => {
+    if (value) {
+      updateBusinessCardMutation.mutate({ publicEnabled: true });
+    } else {
+      disableBusinessCardMutation.mutate();
+    }
+  };
+
+  const handleRotatePublicLink = () => {
+    const confirmRotate = () => rotateBusinessCardMutation.mutate();
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Ce lien va remplacer le precedent et invalider l\'ancien QR. Continuer ?')) {
+        confirmRotate();
+      }
+      return;
+    }
+
+    Alert.alert(
+      'Regenerer le lien',
+      'Ce lien va remplacer le precedent et invalider l\'ancien QR.',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        { text: 'Regenerer', onPress: confirmRotate, style: 'destructive' },
+      ]
+    );
   };
 
   const getRoleLabel = (role: string): string => {
@@ -280,6 +432,190 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Business Card Section */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Carte de visite</Text>
+
+        {isLoadingBusinessCard ? (
+          <ActivityIndicator size="small" color={colors.primary} />
+        ) : (
+          <>
+            <View style={styles.businessHeader}>
+              <View style={styles.businessAvatar}>
+                {cardForm.photoUrl ? (
+                  <Image source={{ uri: cardForm.photoUrl }} style={styles.businessAvatarImage} contentFit="cover" />
+                ) : (
+                  <User size={28} color={colors.surface} />
+                )}
+              </View>
+              <View style={styles.businessInfo}>
+                <Text style={styles.businessName}>
+                  {`${cardForm.firstName} ${cardForm.lastName}`.trim() || user?.name}
+                </Text>
+                {cardForm.jobTitle ? (
+                  <Text style={styles.businessJob}>{cardForm.jobTitle}</Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Prenom</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.firstName}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, firstName: value }))}
+                  placeholder="Prenom"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Nom</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.lastName}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, lastName: value }))}
+                  placeholder="Nom"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Poste</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.jobTitle}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, jobTitle: value }))}
+                  placeholder="Technicien VGP"
+                  placeholderTextColor={colors.textMuted}
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Photo (URL)</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.photoUrl}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, photoUrl: value }))}
+                  placeholder="https://..."
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Email de contact</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.email}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, email: value }))}
+                  placeholder="contact@..."
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Telephone</Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={cardForm.phone}
+                  onChangeText={(value) => setCardForm((prev) => ({ ...prev, phone: value }))}
+                  placeholder="+33 ..."
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>{"Rendre l'email public"}</Text>
+              <Switch
+                value={cardForm.isEmailPublic}
+                onValueChange={(value) => setCardForm((prev) => ({ ...prev, isEmailPublic: value }))}
+                trackColor={{ false: colors.border, true: colors.primaryLight }}
+                thumbColor={cardForm.isEmailPublic ? colors.primary : colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Rendre le telephone public</Text>
+              <Switch
+                value={cardForm.isPhonePublic}
+                onValueChange={(value) => setCardForm((prev) => ({ ...prev, isPhonePublic: value }))}
+                trackColor={{ false: colors.border, true: colors.primaryLight }}
+                thumbColor={cardForm.isPhonePublic ? colors.primary : colors.textMuted}
+              />
+            </View>
+
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Lien public active</Text>
+              <Switch
+                value={businessCard?.publicEnabled ?? false}
+                onValueChange={handleTogglePublicLink}
+                trackColor={{ false: colors.border, true: colors.primaryLight }}
+                thumbColor={(businessCard?.publicEnabled ?? false) ? colors.primary : colors.textMuted}
+                disabled={updateBusinessCardMutation.isPending || disableBusinessCardMutation.isPending}
+              />
+            </View>
+
+            <TouchableOpacity
+              style={[styles.saveButton, updateBusinessCardMutation.isPending && styles.buttonDisabled]}
+              onPress={handleSaveBusinessCard}
+              disabled={updateBusinessCardMutation.isPending}
+            >
+              {updateBusinessCardMutation.isPending ? (
+                <ActivityIndicator size="small" color={colors.surface} />
+              ) : (
+                <>
+                  <Save size={20} color={colors.surface} />
+                  <Text style={styles.saveButtonText}>Enregistrer la carte</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.businessActions}>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleCopyBusinessLink}
+                disabled={!publicLink}
+              >
+                <Text style={styles.secondaryButtonText}>Copier le lien public</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={() => setShowQr(true)}
+                disabled={!publicLink}
+              >
+                <Text style={styles.secondaryButtonText}>Afficher mon QR</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.secondaryButton}
+                onPress={handleRotatePublicLink}
+              >
+                <Text style={styles.secondaryButtonText}>Regenerer le lien</Text>
+              </TouchableOpacity>
+            </View>
+
+            {!!publicLink && (
+              <Text style={styles.publicLinkText}>{publicLink}</Text>
+            )}
+          </>
+        )}
+      </View>
+
       {/* Admin Section - User Management */}
       {isAdmin?.() && (
         <View style={styles.section}>
@@ -328,6 +664,19 @@ export default function ProfileScreen() {
           <Text style={styles.logoutButtonText}>Se déconnecter</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={showQr} transparent animationType="fade" onRequestClose={() => setShowQr(false)}>
+        <View style={styles.qrOverlay}>
+          <View style={styles.qrCard}>
+            <Text style={styles.qrTitle}>Mon QR public</Text>
+            {publicLink ? <QRCode value={publicLink} size={200} /> : null}
+            {publicLink ? <Text style={styles.qrLink}>{publicLink}</Text> : null}
+            <TouchableOpacity style={styles.secondaryButton} onPress={() => setShowQr(false)}>
+              <Text style={styles.secondaryButtonText}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>In-Spectra v1.0</Text>
@@ -489,6 +838,71 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
+  businessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  businessAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  businessAvatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  businessInfo: {
+    flex: 1,
+  },
+  businessName: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  businessJob: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: spacing.xs,
+  },
+  toggleLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  businessActions: {
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  secondaryButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  secondaryButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  publicLinkText: {
+    marginTop: spacing.sm,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
   logoutButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -513,6 +927,32 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 12,
     color: colors.textMuted,
+  },
+  qrOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  qrCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.lg,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  qrTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  qrLink: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: 'center',
   },
   // Admin section styles
   adminHeader: {

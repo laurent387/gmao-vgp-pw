@@ -326,7 +326,21 @@ export default function AdminScreen() {
             {activeTab === 'sites' && 'Gestion des sites'}
             {activeTab === 'assets' && 'Gestion des équipements'}
           </Text>
-          <Button title="Ajouter" onPress={openCreateModal} size="sm" icon={<Plus size={16} color={colors.textInverse} />} />
+          <View style={styles.headerActions}>
+            <Button
+              title="Entreprise"
+              onPress={() => router.push('/company-settings')}
+              size="sm"
+              variant="outline"
+              icon={<Building2 size={16} color={colors.primary} />}
+            />
+            <Button
+              title="Ajouter"
+              onPress={openCreateModal}
+              size="sm"
+              icon={<Plus size={16} color={colors.textInverse} />}
+            />
+          </View>
         </View>
 
         {isLoading ? (
@@ -860,6 +874,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: spacing.lg,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   title: {
     ...typography.h3,

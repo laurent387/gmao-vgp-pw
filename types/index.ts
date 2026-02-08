@@ -29,6 +29,37 @@ export interface User {
   created_at: string;
 }
 
+export interface BusinessCard {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  jobTitle: string | null;
+  photoUrl: string | null;
+  email: string | null;
+  phone: string | null;
+  isEmailPublic: boolean;
+  isPhonePublic: boolean;
+  publicToken: string | null;
+  publicEnabled: boolean;
+}
+
+export interface CompanySettings {
+  id?: number;
+  companyName: string;
+  companyLogoUrl?: string | null;
+  websiteUrl?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  postalCode?: string | null;
+  city?: string | null;
+  country?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  legalName?: string | null;
+  siret?: string | null;
+  primaryColor?: string | null;
+}
+
 export interface Client {
   id: string;
   name: string;

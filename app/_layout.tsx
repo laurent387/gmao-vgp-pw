@@ -100,6 +100,10 @@ function RootLayoutNav() {
         name="client/[id]"
         options={{ title: "Profil Client" }}
       />
+      <Stack.Screen
+        name="company-settings"
+        options={{ title: "Entreprise", headerShown: false }}
+      />
     </Stack>
   );
 }

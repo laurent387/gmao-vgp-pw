@@ -107,6 +107,16 @@ export const login = (data: Record<string, unknown>) => api.post('/auth/login', 
 export const logout = () => api.post('/auth/logout');
 export const getMe = () => api.get('/auth/me');
 
+// Business cards (user)
+export const getMyBusinessCard = () => api.get('/me/business-card');
+export const updateMyBusinessCard = (data: Record<string, unknown>) => api.put('/me/business-card', data);
+export const rotateMyBusinessCardToken = () => api.post('/me/business-card/rotate-token');
+export const disableMyBusinessCardPublic = () => api.post('/me/business-card/disable-public');
+
+// Company settings (admin)
+export const getCompanySettings = () => api.get('/admin/company');
+export const updateCompanySettings = (data: Record<string, unknown>) => api.put('/admin/company', data);
+
 // Attachments
 export const getAttachments = (params?: Record<string, unknown>) => api.get('/attachments', { params });
 export const getAttachment = (id: string) => api.get(`/attachments/${id}`);

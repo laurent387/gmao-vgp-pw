@@ -13,6 +13,7 @@ import { attachmentsRoutes } from './routes/attachments.js';
 import { vgpRoutes } from './routes/vgp.js';
 import { controlsRoutes } from './routes/controls.js';
 import { checklistsRoutes } from './routes/checklists.js';
+import { businessCardRoutes } from './routes/business-cards.js';
 
 const fastify = Fastify();
 const db = new Client({
@@ -86,6 +87,7 @@ async function main() {
   await vgpRoutes(fastify, db);
   await controlsRoutes(fastify, db);
   await checklistsRoutes(fastify, db);
+  await businessCardRoutes(fastify, db);
   const { actionsRoutes } = await import('./routes/actions.js');
   await actionsRoutes(fastify, db);
   const { clientsRoutes } = await import('./routes/clients.js');

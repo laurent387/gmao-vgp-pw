@@ -145,8 +145,8 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
 
       // Corrective actions
       const correctiveActionsRes = await db.query(`
-        SELECT id, nonconformity_id, owner, description, due_at,
-               status, closed_at, validated_by
+         SELECT id, nonconformity_id, owner, description, due_at,
+           parts_refs, photo_ids, status, closed_at, validated_by
         FROM corrective_actions ORDER BY due_at ASC
       `);
       changes.correctiveActions = correctiveActionsRes.rows;

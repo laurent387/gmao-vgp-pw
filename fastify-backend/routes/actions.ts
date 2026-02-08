@@ -8,6 +8,8 @@ const ActionCreateSchema = Type.Object({
   owner: Type.String(),
   description: Type.Optional(Type.String()),
   due_at: Type.String(),
+  parts_refs: Type.Optional(Type.Array(Type.String())),
+  photo_ids: Type.Optional(Type.Array(Type.String())),
   status: Type.Optional(Type.String({ default: 'OUVERTE' })),
 });
 
@@ -16,6 +18,8 @@ const ActionUpdateSchema = Type.Object({
   owner: Type.Optional(Type.String()),
   description: Type.Optional(Type.String()),
   due_at: Type.Optional(Type.String()),
+  parts_refs: Type.Optional(Type.Array(Type.String())),
+  photo_ids: Type.Optional(Type.Array(Type.String())),
   closed_at: Type.Optional(Type.Union([Type.String(), Type.Null()])),
   validated_by: Type.Optional(Type.Union([Type.String(), Type.Null()])),
 });
@@ -72,8 +76,8 @@ export async function actionsRoutes(fastify: FastifyInstance, db: Client) {
     const status = action.status || 'OUVERTE';
     
     const sql = `
-      INSERT INTO corrective_actions (id, nonconformity_id, owner, description, due_at, status, closed_at, validated_by)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      INSERT INTO corrective_actions (id, nonconformity_id, owner, description, due_at, parts_refs, photo_ids, status, closed_at, validated_by)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
     
@@ -83,6 +87,8 @@ export async function actionsRoutes(fastify: FastifyInstance, db: Client) {
       action.owner,
       action.description || null,
       action.due_at,
+      action.parts_refs ? JSON.stringify(action.parts_refs) : null,
+      action.photo_ids ? JSON.stringify(action.photo_ids) : null,
       status,
       null,
       null
@@ -122,6 +128,14 @@ export async function actionsRoutes(fastify: FastifyInstance, db: Client) {
     if (updates.due_at !== undefined) {
       setClauses.push(`due_at = $${paramIndex++}`);
       params.push(updates.due_at);
+    }
+    if (updates.parts_refs !== undefined) {
+      setClauses.push(`parts_refs = $${paramIndex++}`);
+      params.push(updates.parts_refs ? JSON.stringify(updates.parts_refs) : null);
+    }
+    if (updates.photo_ids !== undefined) {
+      setClauses.push(`photo_ids = $${paramIndex++}`);
+      params.push(updates.photo_ids ? JSON.stringify(updates.photo_ids) : null);
     }
     if (updates.closed_at !== undefined) {
       setClauses.push(`closed_at = $${paramIndex++}`);

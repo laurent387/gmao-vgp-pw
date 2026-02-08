@@ -206,6 +206,8 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
         owner: action.owner,
         due_at: action.due_at,
         description: action.description || undefined,
+        parts_refs: action.parts_refs,
+        photo_ids: action.photo_ids,
       });
     }
     
@@ -213,9 +215,20 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
     const id = this.generateId();
     
     await db.runAsync(`
-      INSERT INTO corrective_actions (id, nonconformity_id, owner, description, due_at, status, closed_at, validated_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `, [id, action.nonconformity_id, action.owner, action.description ?? null, action.due_at, action.status, action.closed_at ?? null, action.validated_by ?? null]);
+      INSERT INTO corrective_actions (id, nonconformity_id, owner, description, due_at, parts_refs, photo_ids, status, closed_at, validated_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      id,
+      action.nonconformity_id,
+      action.owner,
+      action.description ?? null,
+      action.due_at,
+      action.parts_refs ? JSON.stringify(action.parts_refs) : null,
+      action.photo_ids ? JSON.stringify(action.photo_ids) : null,
+      action.status,
+      action.closed_at ?? null,
+      action.validated_by ?? null,
+    ]);
     
     return id;
   }
@@ -294,6 +307,14 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
     if (data.due_at !== undefined) {
       fields.push('due_at = ?');
       values.push(data.due_at);
+    }
+    if (data.parts_refs !== undefined) {
+      fields.push('parts_refs = ?');
+      values.push(data.parts_refs ? JSON.stringify(data.parts_refs) : null);
+    }
+    if (data.photo_ids !== undefined) {
+      fields.push('photo_ids = ?');
+      values.push(data.photo_ids ? JSON.stringify(data.photo_ids) : null);
     }
     if (data.closed_at !== undefined) {
       fields.push('closed_at = ?');

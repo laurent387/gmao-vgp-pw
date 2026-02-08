@@ -234,6 +234,8 @@ export async function initializeDatabase(): Promise<void> {
       owner TEXT NOT NULL,
       description TEXT,
       due_at TEXT NOT NULL,
+      parts_refs TEXT,
+      photo_ids TEXT,
       status TEXT NOT NULL DEFAULT 'OUVERTE',
       closed_at TEXT,
       validated_by TEXT,
@@ -318,6 +320,8 @@ export async function initializeDatabase(): Promise<void> {
   for (const col of clientCols) {
     try { await database.execAsync(`ALTER TABLE clients ADD COLUMN ${col} TEXT;`); } catch (e) { /* ignore */ }
   }
+  try { await database.execAsync(`ALTER TABLE corrective_actions ADD COLUMN parts_refs TEXT;`); } catch (e) { /* ignore */ }
+  try { await database.execAsync(`ALTER TABLE corrective_actions ADD COLUMN photo_ids TEXT;`); } catch (e) { /* ignore */ }
   try { await database.execAsync(`ALTER TABLE clients ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';`); } catch (e) { /* ignore */ }
 
   // Add missing asset columns for existing databases

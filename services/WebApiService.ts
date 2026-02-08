@@ -287,7 +287,7 @@ class WebApiService {
     }
   }
 
-  async createCorrectiveAction(data: { nonconformity_id: string; owner: string; due_at: string; description: string }): Promise<string> {
+  async createCorrectiveAction(data: { nonconformity_id: string; owner: string; due_at: string; description: string; parts_refs?: string[]; photo_ids?: string[] }): Promise<string> {
     console.log('[WebAPI] Creating corrective action:', data);
     try {
       const { data: result } = await import('@/app/api').then(m => m.createAction(data));
@@ -298,12 +298,14 @@ class WebApiService {
     }
   }
 
-  async createAction(data: { nonconformity_id: string; owner: string; due_at: string; description?: string }): Promise<string> {
+  async createAction(data: { nonconformity_id: string; owner: string; due_at: string; description?: string; parts_refs?: string[]; photo_ids?: string[] }): Promise<string> {
     return this.createCorrectiveAction({
       nonconformity_id: data.nonconformity_id,
       owner: data.owner,
       due_at: data.due_at,
       description: data.description || '',
+      parts_refs: data.parts_refs,
+      photo_ids: data.photo_ids,
     });
   }
 
@@ -327,7 +329,7 @@ class WebApiService {
     }
   }
 
-  async updateAction(id: string, data: Partial<{ owner: string; description: string; due_at: string; status?: string; validated_by?: string | null; closed_at?: string | null }>): Promise<void> {
+  async updateAction(id: string, data: Partial<{ owner: string; description: string; due_at: string; status?: string; validated_by?: string | null; closed_at?: string | null; parts_refs?: string[]; photo_ids?: string[] }>): Promise<void> {
     console.log('[WebAPI] Updating action:', id, data);
     try {
       await import('@/app/api').then(m => m.updateAction(id, data));

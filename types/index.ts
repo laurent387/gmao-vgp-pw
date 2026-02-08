@@ -246,6 +246,8 @@ export interface CorrectiveAction {
   closed_at: string | null;
   validated_by: string | null;
   description?: string;
+  parts_refs?: string[];
+  photo_ids?: string[];
 }
 
 export interface MaintenanceLog {

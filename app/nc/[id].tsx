@@ -29,17 +29,21 @@ import { Modal, TextInput } from 'react-native';
 interface ActionFormModalProps {
   visible: boolean;
   onClose: () => void;
-  onSubmit: (data: { owner: string; ownerId: string; description: string; dueAt: string }) => void;
+  onSubmit: (data: { owner: string; ownerId: string; description: string; dueAt: string; partsRefs: string[]; photoIds: string[] }) => void;
   isLoading: boolean;
   responsibleUsers: Array<{ id: string; name: string; email: string; role: string }> | undefined;
+  photos: Array<{ id: string; uri: string }>;
 }
 
-function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUsers }: ActionFormModalProps) {
+function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUsers, photos }: ActionFormModalProps) {
   const [owner, setOwner] = useState('');
   const [ownerId, setOwnerId] = useState('');
   const [description, setDescription] = useState('');
   const [dueAt, setDueAt] = useState('');
   const [showPicker, setShowPicker] = useState(false);
+  const [partsRefs, setPartsRefs] = useState<string[]>([]);
+  const [partInput, setPartInput] = useState('');
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<string[]>([]);
   // Key to force re-render of TextInputs when modal opens
   const [formKey, setFormKey] = useState(0);
 
@@ -50,6 +54,9 @@ function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUse
       setOwnerId('');
       setDescription('');
       setDueAt('');
+      setPartsRefs([]);
+      setPartInput('');
+      setSelectedPhotoIds([]);
       setFormKey(k => k + 1);
     }
   }, [visible]);
@@ -59,7 +66,7 @@ function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUse
   };
 
   const handleSubmit = () => {
-    onSubmit({ owner, ownerId, description, dueAt });
+    onSubmit({ owner, ownerId, description, dueAt, partsRefs, photoIds: selectedPhotoIds });
   };
 
   // Only render when visible to avoid focus issues
@@ -115,6 +122,77 @@ function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUse
                 placeholder="2026-02-15"
                 placeholderTextColor={colors.textMuted}
               />
+            </View>
+
+            {/* Pièces détachées */}
+            <View style={modalStyles.field}>
+              <Text style={modalStyles.label}>Pièces détachées</Text>
+              <View style={modalStyles.partRow}>
+                <TextInput
+                  style={[modalStyles.input, modalStyles.partInput]}
+                  value={partInput}
+                  onChangeText={setPartInput}
+                  placeholder="Référence pièce"
+                  placeholderTextColor={colors.textMuted}
+                />
+                <TouchableOpacity
+                  style={modalStyles.partAddBtn}
+                  onPress={() => {
+                    const trimmed = partInput.trim();
+                    if (!trimmed) return;
+                    setPartsRefs((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+                    setPartInput('');
+                  }}
+                >
+                  <Text style={modalStyles.partAddText}>Ajouter</Text>
+                </TouchableOpacity>
+              </View>
+              {partsRefs.length > 0 && (
+                <View style={modalStyles.partList}>
+                  {partsRefs.map((ref) => (
+                    <View key={ref} style={modalStyles.partChip}>
+                      <Text style={modalStyles.partChipText}>{ref}</Text>
+                      <TouchableOpacity onPress={() => setPartsRefs((prev) => prev.filter((r) => r !== ref))}>
+                        <X size={14} color={colors.textMuted} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Photos NC liées */}
+            <View style={modalStyles.field}>
+              <Text style={modalStyles.label}>Photos de la NC</Text>
+              {photos.length === 0 ? (
+                <Text style={modalStyles.emptyText}>Aucune photo disponible</Text>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={modalStyles.photoRow}>
+                  {photos.map((photo) => {
+                    const selected = selectedPhotoIds.includes(photo.id);
+                    return (
+                      <TouchableOpacity
+                        key={photo.id}
+                        style={[modalStyles.photoThumb, selected && modalStyles.photoThumbSelected]}
+                        onPress={() =>
+                          setSelectedPhotoIds((prev) =>
+                            prev.includes(photo.id)
+                              ? prev.filter((id) => id !== photo.id)
+                              : [...prev, photo.id]
+                          )
+                        }
+                      >
+                        <Image source={{ uri: photo.uri }} style={modalStyles.photoImage} contentFit="cover" />
+                        {selected && (
+                          <View style={modalStyles.photoCheck}>
+                            <CheckCircle size={18} color={colors.success} />
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
             </View>
 
             <View style={modalStyles.buttons}>
@@ -182,7 +260,6 @@ function ActionFormModal({ visible, onClose, onSubmit, isLoading, responsibleUse
     </>
   );
 }
-
 const modalStyles = StyleSheet.create({
   overlay: {
     flex: 1,
@@ -222,6 +299,76 @@ const modalStyles = StyleSheet.create({
   inputMulti: {
     minHeight: 80,
     textAlignVertical: 'top' as const,
+  },
+  partRow: {
+    flexDirection: 'row' as const,
+    gap: spacing.sm,
+    alignItems: 'center' as const,
+  },
+  partInput: {
+    flex: 1,
+  },
+  partAddBtn: {
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: borderRadius.md,
+  },
+  partAddText: {
+    color: colors.textInverse,
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  partList: {
+    flexDirection: 'row' as const,
+    flexWrap: 'wrap' as const,
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  partChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: borderRadius.full,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  partChipText: {
+    fontSize: 12,
+    color: colors.text,
+  },
+  photoRow: {
+    gap: spacing.sm,
+  },
+  photoThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: borderRadius.md,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.border,
+  },
+  photoThumbSelected: {
+    borderColor: colors.success,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoCheck: {
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    backgroundColor: colors.surface,
+    borderRadius: borderRadius.full,
+    padding: 2,
+  },
+  emptyText: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   selector: {
     flexDirection: 'row' as const,
@@ -445,7 +592,7 @@ export default function NCDetailScreen() {
   });
 
   const createActionMutation = useMutation({
-    mutationFn: async (data: { owner: string; ownerId: string; description: string; dueAt: string }) => {
+    mutationFn: async (data: { owner: string; ownerId: string; description: string; dueAt: string; partsRefs: string[]; photoIds: string[] }) => {
       if (!id) throw new Error('NC inconnue');
       if (!data.owner || !data.dueAt) throw new Error('Responsable et échéance requis');
 
@@ -458,6 +605,8 @@ export default function NCDetailScreen() {
         owner: data.owner,
         description: data.description,
         due_at: data.dueAt,
+        parts_refs: data.partsRefs,
+        photo_ids: data.photoIds,
         status: 'OUVERTE',
         closed_at: null,
         validated_by: null,
@@ -591,6 +740,17 @@ export default function NCDetailScreen() {
     },
     []
   );
+  const actionPhotoOptions = useMemo(() => {
+    const options: Array<{ id: string; uri: string }> = [];
+    for (const doc of photoDocs) {
+      options.push({ id: `doc:${doc.id}`, uri: resolveImageUri(doc) });
+    }
+    for (const att of apiPhotos) {
+      const uri = `https://api.in-spectra.com/uploads/${att.storage_key}`;
+      options.push({ id: `att:${att.id}`, uri });
+    }
+    return options;
+  }, [photoDocs, apiPhotos, resolveImageUri]);
   const canProgress = canEdit() && action;
   const canClose = canProgress && action?.status === 'EN_COURS';
   const canValidateAction = canValidate() && action?.status === 'CLOTUREE';
@@ -1219,6 +1379,7 @@ export default function NCDetailScreen() {
             onSubmit={(data) => createActionMutation.mutate(data)}
             isLoading={createActionMutation.isPending}
             responsibleUsers={responsibleUsers}
+            photos={actionPhotoOptions}
           />
         </View>
       </ScrollView>

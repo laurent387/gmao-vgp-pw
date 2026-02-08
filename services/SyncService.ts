@@ -284,7 +284,7 @@ class SyncService {
       if (changes.correctiveActions) {
         await upsert('corrective_actions', changes.correctiveActions, [
           'id', 'nonconformity_id', 'owner', 'description', 'due_at',
-          'status', 'closed_at', 'validated_by'
+          'parts_refs', 'photo_ids', 'status', 'closed_at', 'validated_by'
         ]);
       }
 

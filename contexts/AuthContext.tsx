@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 import { User, UserRole } from '@/types';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { setApiAuthToken } from '@/app/api';
+import { setTrpcAuthToken } from '@/lib/trpc';
 import * as api from '@/app/api';
 import { attachmentService } from '@/services/AttachmentService';
 
@@ -80,6 +81,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     if (stored?.token) {
       try {
         setApiAuthToken(stored.token);
+        setTrpcAuthToken(stored.token);
         attachmentService.setAuthToken(stored.token);
         const response = await api.getMe();
         const me = response.data;
@@ -105,6 +107,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       // Set tokens for local restore as well
       if (stored.token) {
         setApiAuthToken(stored.token);
+        setTrpcAuthToken(stored.token);
         attachmentService.setAuthToken(stored.token);
       }
       console.log('[AUTH] Restored session for:', stored.user.email);
@@ -155,6 +158,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
       const mustChangePassword = Boolean(payload?.mustChangePassword);
       await setStoredAuth({ user, token: tokenResult });
       setApiAuthToken(tokenResult);
+      setTrpcAuthToken(tokenResult);
       attachmentService.setAuthToken(tokenResult);
       setState({ user, isLoading: false, isAuthenticated: true, mustChangePassword });
       console.log('[AUTH] Login successful for:', user.email, 'role:', user.role);
@@ -170,6 +174,7 @@ export const [AuthProvider, useAuth] = createContextHook(() => {
     console.log('[AUTH] Logging out');
     await setStoredAuth(null);
     setApiAuthToken(null);
+    setTrpcAuthToken(null);
     attachmentService.setAuthToken(null);
     setState({ user: null, isLoading: false, isAuthenticated: false, mustChangePassword: false });
   }, []);

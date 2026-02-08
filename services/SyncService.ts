@@ -15,7 +15,7 @@ export interface SyncResult {
 
 class SyncService {
   private isSyncing = false;
-  private apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+  private apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://api.in-spectra.com';
 
   async sync(): Promise<SyncResult> {
     if (this.isSyncing) {

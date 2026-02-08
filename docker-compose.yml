@@ -12,8 +12,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/db/migrations:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
+    # Port not exposed to avoid conflict with systemd PostgreSQL
+    # Access via Docker network only
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U api_user -d in_spectra"]
       interval: 10s
@@ -39,8 +39,6 @@ services:
       DATABASE_USER: api_user
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
       DATABASE_SSL: ${DATABASE_SSL:-false}
-    env_file:
-      - .env
     ports:
       - "3000:3000"
     volumes:
@@ -67,9 +65,8 @@ services:
       DATABASE_NAME: in_spectra
       DATABASE_USER: api_user
       DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      DATABASE_URL: postgres://api_user:${DATABASE_PASSWORD}@postgres:5432/in_spectra
       JWT_SECRET: ${JWT_SECRET:-dev-secret}
-    env_file:
-      - .env
     ports:
       - "4000:4000"
     volumes:

@@ -7,15 +7,17 @@ WORKDIR /app
 RUN apk add --no-cache curl
 
 # Copy package files
-COPY fastify-backend/package*.json ./
+COPY fastify-backend/package.json ./
+COPY fastify-backend/bun.lock ./
 
 # Install dependencies
 RUN bun install --production
 
 # Copy fastify backend code
 COPY fastify-backend ./
-COPY uploads ./uploads
-COPY web-dist ./web-dist
+
+# Create uploads and web-dist directories (will be mounted as volumes)
+RUN mkdir -p uploads web-dist
 
 # Expose port
 EXPOSE 4000

@@ -13,12 +13,14 @@ import { SectionCard } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { ncRepository, actionRepository } from '@/repositories/NCRepository';
+import { assetRepository } from '@/repositories/AssetRepository';
+import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
 import { documentRepository } from '@/repositories/DocumentRepository';
 import { webApiService } from '@/services/WebApiService';
 import { syncService } from '@/services/SyncService';
 import { attachmentService } from '@/services/AttachmentService';
 import { useAuth } from '@/contexts/AuthContext';
-import { Document, NonConformity, ActionStatus, CorrectiveAction } from '@/types';
+import { Document, NonConformity, ActionStatus, CorrectiveAction, Asset, Client, Site } from '@/types';
 import { Input } from '@/components/Input';
 import { formatDateFR, formatDateTimeFR } from '@/lib/dateUtils';
 import { Modal, TextInput } from 'react-native';
@@ -360,6 +362,32 @@ export default function NCDetailScreen() {
     },
   });
 
+  const { data: assetDetails } = useQuery<Asset | null>({
+    queryKey: ['asset', nc?.asset_id],
+    queryFn: () => assetRepository.getByIdWithDetails(nc!.asset_id),
+    enabled: !!nc?.asset_id,
+  });
+
+  const { data: sites } = useQuery<Site[]>({
+    queryKey: ['sites-with-client'],
+    queryFn: () => siteRepository.getAllWithClientName(),
+  });
+
+  const { data: clients } = useQuery<Client[]>({
+    queryKey: ['clients'],
+    queryFn: () => clientRepository.getAll(),
+  });
+
+  const siteForAsset = useMemo(() => {
+    if (!assetDetails?.site_id) return undefined;
+    return sites?.find((s) => s.id === assetDetails.site_id);
+  }, [assetDetails?.site_id, sites]);
+
+  const clientName = useMemo(() => {
+    if (!siteForAsset) return undefined;
+    return siteForAsset.client_name || clients?.find((c) => c.id === siteForAsset.client_id)?.name;
+  }, [siteForAsset, clients]);
+
   // Initialize edit form when NC is loaded
   React.useEffect(() => {
     if (nc) {
@@ -572,6 +600,7 @@ export default function NCDetailScreen() {
     
     switch (action.status) {
       case 'OUVERTE':
+      case 'PLANIFIEE':
         return canProgress ? (
           <Button
             title="Démarrer l'action"
@@ -769,6 +798,24 @@ export default function NCDetailScreen() {
                 </View>
               </View>
 
+              <View style={styles.contextInfo}>
+                {(assetDetails?.code_interne || (nc as any).asset_code) && (
+                  <Text style={styles.assetInfo}>
+                    Équipement: {assetDetails?.code_interne || (nc as any).asset_code} - {assetDetails?.designation || (nc as any).asset_designation}
+                  </Text>
+                )}
+                {siteForAsset?.name && (
+                  <Text style={styles.assetInfo}>
+                    Site: {siteForAsset.name}
+                  </Text>
+                )}
+                {clientName && (
+                  <Text style={styles.assetInfo}>
+                    Client: {clientName}
+                  </Text>
+                )}
+              </View>
+
               {/* Title input */}
               <View style={styles.editField}>
                 <Text style={styles.editLabel}>Titre</Text>
@@ -855,9 +902,19 @@ export default function NCDetailScreen() {
                 <StatusBadge status={nc?.status ?? 'OUVERTE'} />
               </View>
               <Text style={styles.title}>{nc?.title ?? ''}</Text>
-              {(nc as any).asset_code && (
+              {(assetDetails?.code_interne || (nc as any).asset_code) && (
                 <Text style={styles.assetInfo}>
-                  Équipement: {(nc as any).asset_code} - {(nc as any).asset_designation}
+                  Équipement: {assetDetails?.code_interne || (nc as any).asset_code} - {assetDetails?.designation || (nc as any).asset_designation}
+                </Text>
+              )}
+              {siteForAsset?.name && (
+                <Text style={styles.assetInfo}>
+                  Site: {siteForAsset.name}
+                </Text>
+              )}
+              {clientName && (
+                <Text style={styles.assetInfo}>
+                  Client: {clientName}
                 </Text>
               )}
               <Text style={styles.date}>Créée le {formatDate(nc?.created_at ?? null)}</Text>
@@ -957,7 +1014,7 @@ export default function NCDetailScreen() {
             <SectionCard 
               title="Action corrective"
               action={
-                action.status !== 'VALIDEE' && canEdit() && !isReadOnly() && !isEditingAction ? (
+                action.status !== 'VALIDEE' && isAdmin() && !isEditingAction ? (
                   <TouchableOpacity
                     style={styles.actionEditBtn}
                     onPress={() => {
@@ -1143,7 +1200,7 @@ export default function NCDetailScreen() {
             </View>
           </Modal>
 
-          {!action && canEdit() && !isReadOnly() && (
+          {!action && isAdmin() && (
             <View style={styles.noAction}>
               <Text style={styles.noActionText}>Aucune action corrective définie</Text>
               <Button
@@ -1196,6 +1253,9 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySmall.fontSize,
     color: colors.primary,
     marginBottom: spacing.xs,
+  },
+  contextInfo: {
+    marginBottom: spacing.md,
   },
   date: {
     fontSize: typography.caption.fontSize,

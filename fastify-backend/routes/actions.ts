@@ -23,22 +23,32 @@ const ActionUpdateSchema = Type.Object({
 export async function actionsRoutes(fastify: FastifyInstance, db: Client) {
   // GET /actions - List all actions
   fastify.get('/actions', async (request, reply) => {
-    const { nonconformity_id, status, limit = 50, offset = 0 } = request.query as any;
+    const { nonconformity_id, status, assetId, limit = 50, offset = 0 } = request.query as any;
     
-    let query = 'SELECT * FROM corrective_actions WHERE 1=1';
+    let query = 'SELECT ca.* FROM corrective_actions ca';
     const params: any[] = [];
     let paramIndex = 1;
+
+    if (assetId) {
+      query += ' JOIN nonconformities nc ON ca.nonconformity_id = nc.id';
+    }
     
+    query += ' WHERE 1=1';
+
     if (nonconformity_id) {
-      query += ` AND nonconformity_id = $${paramIndex++}`;
+      query += ` AND ca.nonconformity_id = $${paramIndex++}`;
       params.push(nonconformity_id);
     }
     if (status) {
-      query += ` AND status = $${paramIndex++}`;
+      query += ` AND ca.status = $${paramIndex++}`;
       params.push(status);
     }
+    if (assetId) {
+      query += ` AND nc.asset_id = $${paramIndex++}`;
+      params.push(assetId);
+    }
     
-    query += ` ORDER BY due_at ASC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    query += ` ORDER BY ca.due_at ASC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     params.push(limit, offset);
     
     const res = await db.query(query, params);

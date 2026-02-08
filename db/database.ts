@@ -177,6 +177,7 @@ export async function initializeDatabase(): Promise<void> {
       mission_id TEXT NOT NULL,
       operation_type TEXT NOT NULL,
       asset_id TEXT NOT NULL,
+      corrective_action_id TEXT,
       work_description TEXT,
       checklist_template_id INTEGER,
       checklist_data TEXT DEFAULT '[]',
@@ -334,6 +335,7 @@ export async function initializeDatabase(): Promise<void> {
         mission_id TEXT NOT NULL,
         operation_type TEXT NOT NULL,
         asset_id TEXT NOT NULL,
+        corrective_action_id TEXT,
         work_description TEXT,
         checklist_template_id INTEGER,
         checklist_data TEXT DEFAULT '[]',
@@ -344,6 +346,8 @@ export async function initializeDatabase(): Promise<void> {
       );
     `);
   } catch (e) { /* ignore */ }
+
+  try { await database.execAsync(`ALTER TABLE mission_operation_assets ADD COLUMN corrective_action_id TEXT;`); } catch (e) { /* ignore */ }
   
   console.log('[DB] Tables created successfully');
 }

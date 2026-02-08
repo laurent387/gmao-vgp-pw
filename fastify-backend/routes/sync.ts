@@ -100,8 +100,8 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
 
       // Mission operation assets
       const missionOperationAssetsRes = await db.query(`
-        SELECT id, mission_id, operation_type, asset_id, work_description,
-               checklist_template_id, checklist_data::text, created_at, updated_at
+         SELECT id, mission_id, operation_type, asset_id, corrective_action_id, work_description,
+           checklist_template_id, checklist_data::text, created_at, updated_at
         FROM mission_operation_assets ORDER BY mission_id
       `);
       changes.missionOperationAssets = missionOperationAssetsRes.rows;

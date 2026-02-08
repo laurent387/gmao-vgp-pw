@@ -222,6 +222,7 @@ class WebApiService {
     technician_ids: string[];
     operation_types: (string | import('@/types').OperationType)[];
     operation_assets?: Record<string, string[]>;
+    operation_action_map?: Record<string, string>;
   }): Promise<string> {
     console.log('[WebAPI] Creating mission (full):', data);
     try {
@@ -289,22 +290,50 @@ class WebApiService {
   async createCorrectiveAction(data: { nonconformity_id: string; owner: string; due_at: string; description: string }): Promise<string> {
     console.log('[WebAPI] Creating corrective action:', data);
     try {
-      // For now, store as part of the NC or in a separate table
-      const id = `action_${Date.now()}`;
-      // TODO: Implement corrective actions endpoint
-      return id;
+      const { data: result } = await import('@/app/api').then(m => m.createAction(data));
+      return result?.id || '';
     } catch (e) {
       console.error('[WebAPI] Error creating action:', e);
       throw e;
     }
   }
 
+  async createAction(data: { nonconformity_id: string; owner: string; due_at: string; description?: string }): Promise<string> {
+    return this.createCorrectiveAction({
+      nonconformity_id: data.nonconformity_id,
+      owner: data.owner,
+      due_at: data.due_at,
+      description: data.description || '',
+    });
+  }
+
   async updateActionStatus(id: string, status: string, validatedBy?: string): Promise<void> {
     console.log('[WebAPI] Updating action status:', id, status);
     try {
-      // TODO: Implement action status update endpoint
+      await import('@/app/api').then(m => m.updateAction(id, { status, validated_by: validatedBy }));
     } catch (e) {
       console.error('[WebAPI] Error updating action status:', e);
+    }
+  }
+
+  async getActions(params?: Record<string, unknown>): Promise<CorrectiveAction[]> {
+    console.log('[WebAPI] Fetching actions:', params);
+    try {
+      const { data } = await import('@/app/api').then(m => m.getActions(params));
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.error('[WebAPI] Error fetching actions:', e);
+      return [];
+    }
+  }
+
+  async updateAction(id: string, data: Partial<{ owner: string; description: string; due_at: string; status?: string; validated_by?: string | null; closed_at?: string | null }>): Promise<void> {
+    console.log('[WebAPI] Updating action:', id, data);
+    try {
+      await import('@/app/api').then(m => m.updateAction(id, data));
+    } catch (e) {
+      console.error('[WebAPI] Error updating action:', e);
+      throw e;
     }
   }
 
@@ -395,47 +424,6 @@ class WebApiService {
     }
   }
 
-  // Corrective Actions
-  async getActions(filters?: { nonconformity_id?: string; status?: string }): Promise<any[]> {
-    console.log('[WebAPI] Fetching actions:', filters);
-    try {
-      const { data } = await import('@/app/api').then(m => m.getActions?.(filters) || Promise.resolve({ data: [] }));
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      console.error('[WebAPI] Error fetching actions:', e);
-      return [];
-    }
-  }
-
-  async createAction(actionData: { nonconformity_id: string; owner: string; due_at: string; description?: string }): Promise<string> {
-    console.log('[WebAPI] Creating action:', actionData);
-    try {
-      const { data } = await import('@/app/api').then(m => m.createAction(actionData));
-      return data.id;
-    } catch (e) {
-      console.error('[WebAPI] Error creating action:', e);
-      throw e;
-    }
-  }
-
-  async updateActionStatus(id: string, status: string, validatedBy?: string): Promise<void> {
-    console.log('[WebAPI] Updating action status:', id, status);
-    try {
-      await import('@/app/api').then(m => m.updateAction(id, { status, validated_by: validatedBy }));
-    } catch (e) {
-      console.error('[WebAPI] Error updating action status:', e);
-    }
-  }
-
-  async updateAction(id: string, data: Partial<{ owner: string; description: string; due_at: string }>): Promise<void> {
-    console.log('[WebAPI] Updating action:', id, data);
-    try {
-      await import('@/app/api').then(m => m.updateAction(id, data));
-    } catch (e) {
-      console.error('[WebAPI] Error updating action:', e);
-      throw e;
-    }
-  }
 }
 
 export const webApiService = new WebApiService();

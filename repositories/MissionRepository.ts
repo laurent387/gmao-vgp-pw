@@ -113,7 +113,8 @@ export class MissionRepository extends BaseRepository<Mission> {
     assetIds: string[],
     technicianIds?: string[],
     operationTypes?: (string | OperationType)[],
-    operationAssets?: Record<string, string[]>
+    operationAssets?: Record<string, string[]>,
+    operationActionMap?: Record<string, string>
   ): Promise<string> {
     if (Platform.OS === 'web') {
       return webApiService.createMissionFull({
@@ -122,6 +123,7 @@ export class MissionRepository extends BaseRepository<Mission> {
         technician_ids: technicianIds || [],
         operation_types: operationTypes || [],
         operation_assets: operationAssets || {},
+        operation_action_map: operationActionMap || {},
       });
     }
     
@@ -159,6 +161,21 @@ export class MissionRepository extends BaseRepository<Mission> {
           'INSERT INTO mission_operations (id, mission_id, operation_type, sort_order, created_at) VALUES (?, ?, ?, ?, ?)',
           [this.generateId(), id, operationTypes[i], i, now]
         );
+      }
+    }
+
+    // Add mission operation assets with optional corrective action links
+    if (operationAssets) {
+      for (const [operationType, assetIdsForOp] of Object.entries(operationAssets)) {
+        for (const assetId of assetIdsForOp) {
+          const correctiveActionId = operationActionMap?.[assetId] || null;
+          await db.runAsync(
+            `INSERT INTO mission_operation_assets
+             (mission_id, operation_type, asset_id, corrective_action_id, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [id, operationType, assetId, correctiveActionId, now, now]
+          );
+        }
       }
     }
     

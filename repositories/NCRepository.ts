@@ -240,7 +240,7 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
     const db = await getDatabase();
     const result = await db.getFirstAsync<{ count: number }>(`
       SELECT COUNT(*) as count FROM corrective_actions 
-      WHERE status IN ('OUVERTE', 'EN_COURS') AND due_at < datetime('now')
+      WHERE status IN ('OUVERTE', 'PLANIFIEE', 'EN_COURS') AND due_at < datetime('now')
     `);
     return result?.count ?? 0;
   }
@@ -255,6 +255,21 @@ export class ActionRepository extends BaseRepository<CorrectiveAction> {
       'SELECT * FROM corrective_actions WHERE status = ? ORDER BY due_at ASC',
       [status]
     );
+  }
+
+  async getPendingByAsset(assetId: string): Promise<CorrectiveAction[]> {
+    if (Platform.OS === 'web') {
+      return webApiService.getActions({ assetId, status: 'OUVERTE' });
+    }
+
+    const db = await getDatabase();
+    return db.getAllAsync<CorrectiveAction>(`
+      SELECT ca.*
+      FROM corrective_actions ca
+      JOIN nonconformities nc ON nc.id = ca.nonconformity_id
+      WHERE nc.asset_id = ? AND ca.status = 'OUVERTE'
+      ORDER BY ca.due_at ASC
+    `, [assetId]);
   }
 
   async update(id: string, data: Partial<CorrectiveAction>): Promise<void> {

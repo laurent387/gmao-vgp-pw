@@ -8,7 +8,7 @@ export type MissionStatus = 'A_PLANIFIER' | 'PLANIFIEE' | 'EN_COURS' | 'TERMINEE
 
 export type NCStatus = 'OUVERTE' | 'EN_COURS' | 'CLOTUREE';
 
-export type ActionStatus = 'OUVERTE' | 'EN_COURS' | 'CLOTUREE' | 'VALIDEE';
+export type ActionStatus = 'OUVERTE' | 'PLANIFIEE' | 'EN_COURS' | 'CLOTUREE' | 'VALIDEE';
 
 export type ChecklistItemStatus = 'OK' | 'KO' | 'NA';
 

@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -21,9 +22,12 @@ import { siteRepository, clientRepository } from '@/repositories/SiteRepository'
 import { assetRepository } from '@/repositories/AssetRepository';
 import { userRepository } from '@/repositories/UserRepository';
 import { missionRepository } from '@/repositories/MissionRepository';
+import { actionRepository } from '@/repositories/NCRepository';
 import { syncService } from '@/services/SyncService';
 import { useAuth } from '@/contexts/AuthContext';
-import { Site, Asset, User, OperationType, Client } from '@/types';
+import { Site, Asset, User, OperationType, Client, CorrectiveAction } from '@/types';
+import { webApiService } from '@/services/WebApiService';
+import { formatDateFR } from '@/lib/dateUtils';
 
 const schema = z.object({
   clientId: z.string().min(1, 'Sélectionnez un client'),
@@ -63,6 +67,7 @@ export default function CreateMissionScreen() {
     REPARATION: [],
     MODIFICATION: [],
   });
+  const [operationActionMap, setOperationActionMap] = useState<Record<string, string>>({});
 
   const {
     control,
@@ -108,6 +113,19 @@ export default function CreateMissionScreen() {
     enabled: !!selectedSiteId,
   });
 
+  const repairAssetIds = operationAssets.REPARATION || [];
+  const { data: pendingActionsByAsset } = useQuery<Record<string, CorrectiveAction[]>>({
+    queryKey: ['pending-actions-by-asset', repairAssetIds],
+    queryFn: async () => {
+      const result: Record<string, CorrectiveAction[]> = {};
+      for (const assetId of repairAssetIds) {
+        result[assetId] = await actionRepository.getPendingByAsset(assetId);
+      }
+      return result;
+    },
+    enabled: repairAssetIds.length > 0,
+  });
+
   // Synchroniser selectedAssets avec les équipements assignés aux opérations
   useEffect(() => {
     const allAssignedAssets = new Set<string>();
@@ -116,6 +134,17 @@ export default function CreateMissionScreen() {
     });
     setSelectedAssets(Array.from(allAssignedAssets));
   }, [operationAssets]);
+
+  // Nettoyer les actions sélectionnées si l'équipement n'est plus en réparation
+  useEffect(() => {
+    setOperationActionMap((prev) => {
+      const next: Record<string, string> = {};
+      for (const assetId of repairAssetIds) {
+        if (prev[assetId]) next[assetId] = prev[assetId];
+      }
+      return next;
+    });
+  }, [repairAssetIds]);
 
   const createMutation = useMutation({
     mutationFn: async (data: FormData) => {
@@ -134,13 +163,28 @@ export default function CreateMissionScreen() {
         selectedAssets,
         data.assignedToIds,
         data.operationTypes,
-        operationAssets // Ajouter la structure hiérarchique opération->équipements
+        operationAssets,
+        operationActionMap
       );
+
+      const plannedActionIds = Object.values(operationActionMap).filter(Boolean);
+      for (const actionId of plannedActionIds) {
+        if (Platform.OS === 'web') {
+          await webApiService.updateActionStatus(actionId, 'PLANIFIEE');
+        } else {
+          await actionRepository.update(actionId, { status: 'PLANIFIEE' });
+          await syncService.addToOutbox('UPDATE_ACTION', {
+            id: actionId,
+            status: 'PLANIFIEE',
+          });
+        }
+      }
 
       await syncService.addToOutbox('CREATE_MISSION', {
         id: missionId,
         ...data,
         assets: selectedAssets,
+        operation_action_map: operationActionMap,
       });
 
       return missionId;
@@ -174,6 +218,17 @@ export default function CreateMissionScreen() {
         ? prev[operation].filter((id) => id !== assetId)
         : [...prev[operation], assetId],
     }));
+
+    if (operation === 'REPARATION') {
+      setOperationActionMap((prev) => {
+        if (prev[assetId]) {
+          const next = { ...prev };
+          delete next[assetId];
+          return next;
+        }
+        return prev;
+      });
+    }
   };
 
   const toggleTechnician = (techId: string) => {
@@ -446,38 +501,94 @@ export default function CreateMissionScreen() {
                         </Text>
                         {assets.map((asset) => {
                           const isSelected = operationAssetsList.includes(asset.id);
+                          const pendingActions = pendingActionsByAsset?.[asset.id] || [];
+                          const selectedActionId = operationActionMap[asset.id];
                           return (
-                            <TouchableOpacity
-                              key={asset.id}
-                              style={[
-                                styles.operationAssetItem,
-                                isSelected && styles.operationAssetItemSelected,
-                              ]}
-                              onPress={() => toggleOperationAsset(operation, asset.id)}
-                            >
-                              <View
+                            <View key={asset.id}>
+                              <TouchableOpacity
                                 style={[
-                                  styles.operationAssetCheckbox,
-                                  isSelected && styles.checkboxSelected,
+                                  styles.operationAssetItem,
+                                  isSelected && styles.operationAssetItemSelected,
                                 ]}
+                                onPress={() => toggleOperationAsset(operation, asset.id)}
                               >
-                                {isSelected && <Check size={14} color="white" />}
-                              </View>
-                              <View style={styles.operationAssetInfo}>
-                                <Text style={[
-                                  styles.operationAssetCode,
-                                  isSelected && styles.operationAssetCodeSelected,
-                                ]}>
-                                  {asset.code_interne}
-                                </Text>
-                                <Text style={[
-                                  styles.operationAssetDesignation,
-                                  isSelected && styles.operationAssetDesignationSelected,
-                                ]}>
-                                  {asset.designation}
-                                </Text>
-                              </View>
-                            </TouchableOpacity>
+                                <View
+                                  style={[
+                                    styles.operationAssetCheckbox,
+                                    isSelected && styles.checkboxSelected,
+                                  ]}
+                                >
+                                  {isSelected && <Check size={14} color="white" />}
+                                </View>
+                                <View style={styles.operationAssetInfo}>
+                                  <Text style={[
+                                    styles.operationAssetCode,
+                                    isSelected && styles.operationAssetCodeSelected,
+                                  ]}>
+                                    {asset.code_interne}
+                                  </Text>
+                                  <Text style={[
+                                    styles.operationAssetDesignation,
+                                    isSelected && styles.operationAssetDesignationSelected,
+                                  ]}>
+                                    {asset.designation}
+                                  </Text>
+                                </View>
+                              </TouchableOpacity>
+
+                              {isSelected && operation === 'REPARATION' && (
+                                <View style={styles.correctiveActionPicker}>
+                                  <Text style={styles.correctiveActionLabel}>
+                                    Action corrective en attente de planification
+                                  </Text>
+
+                                  {pendingActions.length === 0 ? (
+                                    <Text style={styles.correctiveActionEmpty}>Aucune action en attente</Text>
+                                  ) : (
+                                    <View>
+                                      <TouchableOpacity
+                                        style={[
+                                          styles.correctiveActionItem,
+                                          !selectedActionId && styles.correctiveActionItemSelected,
+                                        ]}
+                                        onPress={() =>
+                                          setOperationActionMap((prev) => {
+                                            const next = { ...prev };
+                                            delete next[asset.id];
+                                            return next;
+                                          })
+                                        }
+                                      >
+                                        <Text style={styles.correctiveActionTitle}>Aucune</Text>
+                                      </TouchableOpacity>
+
+                                      {pendingActions.map((action) => (
+                                        <TouchableOpacity
+                                          key={action.id}
+                                          style={[
+                                            styles.correctiveActionItem,
+                                            selectedActionId === action.id && styles.correctiveActionItemSelected,
+                                          ]}
+                                          onPress={() =>
+                                            setOperationActionMap((prev) => ({
+                                              ...prev,
+                                              [asset.id]: action.id,
+                                            }))
+                                          }
+                                        >
+                                          <Text style={styles.correctiveActionTitle}>
+                                            {action.description || 'Action corrective'}
+                                          </Text>
+                                          <Text style={styles.correctiveActionMeta}>
+                                            Echeance: {formatDateFR(action.due_at)}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      ))}
+                                    </View>
+                                  )}
+                                </View>
+                              )}
+                            </View>
                           );
                         })}
                       </View>
@@ -884,6 +995,48 @@ const styles = StyleSheet.create({
   },
   operationAssetDesignationSelected: {
     fontWeight: '500' as const,
+  },
+  correctiveActionPicker: {
+    marginLeft: spacing.xl,
+    marginBottom: spacing.md,
+    padding: spacing.sm,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  correctiveActionLabel: {
+    fontSize: typography.caption.fontSize,
+    fontWeight: '600' as const,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  correctiveActionItem: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: borderRadius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    marginBottom: spacing.xs,
+  },
+  correctiveActionItemSelected: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '08',
+  },
+  correctiveActionTitle: {
+    fontSize: typography.bodySmall.fontSize,
+    color: colors.text,
+    fontWeight: '500' as const,
+  },
+  correctiveActionMeta: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  correctiveActionEmpty: {
+    fontSize: typography.caption.fontSize,
+    color: colors.textMuted,
   },
   sectionDescription: {
     fontSize: typography.bodySmall.fontSize,

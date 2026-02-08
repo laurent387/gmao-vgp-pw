@@ -108,7 +108,7 @@ export async function missionsRoutes(fastify: FastifyInstance, db: Client) {
 
   fastify.post('/missions', async (request, reply) => {
     const body = request.body as any;
-    const { asset_ids, technician_ids, operation_types, operation_assets, ...missionData } = body;
+    const { asset_ids, technician_ids, operation_types, operation_assets, operation_action_map, ...missionData } = body;
     
     // Generate ID if not provided
     const id = missionData.id || `mission_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -202,12 +202,14 @@ export async function missionsRoutes(fastify: FastifyInstance, db: Client) {
                 }
               }
               
+              const correctiveActionId = operation_action_map?.[assetId] || null;
+
               await db.query(
                 `INSERT INTO mission_operation_assets 
-                 (mission_id, operation_type, asset_id, checklist_template_id, checklist_data)
-                 VALUES ($1, $2, $3, $4, $5)
+                 (mission_id, operation_type, asset_id, corrective_action_id, checklist_template_id, checklist_data)
+                 VALUES ($1, $2, $3, $4, $5, $6)
                  ON CONFLICT (mission_id, operation_type, asset_id) DO NOTHING`,
-                [id, operationType, assetId, checklistId, JSON.stringify(checklistData)]
+                [id, operationType, assetId, correctiveActionId, checklistId, JSON.stringify(checklistData)]
               );
             }
           }

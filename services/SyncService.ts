@@ -244,7 +244,7 @@ class SyncService {
 
       if (changes.missionOperationAssets) {
         await upsert('mission_operation_assets', changes.missionOperationAssets, [
-          'id', 'mission_id', 'operation_type', 'asset_id', 'work_description',
+          'id', 'mission_id', 'operation_type', 'asset_id', 'corrective_action_id', 'work_description',
           'checklist_template_id', 'checklist_data', 'created_at', 'updated_at'
         ]);
       }

@@ -2,13 +2,15 @@ import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, RefreshControl, ScrollView, TouchableOpacity } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { Filter, Building2, MapPin, Check } from 'lucide-react-native';
+import { Filter, Building2, MapPin, Check, ChevronRight } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography, shadows } from '@/constants/theme';
 import { SearchInput } from '@/components/Input';
 import { DataTable, type Column } from '@/components/DataTable';
 import { DesktopFilterBar } from '@/components/DesktopFilterBar';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
+import { PressableCard } from '@/components/interactive';
 import { useIsDesktop, useScreenSize } from '@/hooks/useResponsive';
+import { useNavigation } from '@/lib/navigation';
 import { assetRepository, AssetFilters } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
 import type { Asset, AssetStatus, Client, Site } from '@/types';
@@ -152,6 +154,7 @@ function MobileFilterPanel({
 
 export default function InventoryScreen() {
   const router = useRouter();
+  const nav = useNavigation();
   const isDesktop = useIsDesktop();
   const screenSize = useScreenSize();
   const params = useLocalSearchParams<{ clientId?: string; siteId?: string }>();
@@ -212,7 +215,7 @@ export default function InventoryScreen() {
   };
 
   const handleRowPress = (asset: Asset) => {
-    router.push(`/asset/${asset.id}`);
+    nav.goToEquipment(asset.id, (asset as any).site_id, (asset as any).client_id);
   };
 
   const handleSort = (key: string, order: 'asc' | 'desc' | null) => {
@@ -353,10 +356,10 @@ export default function InventoryScreen() {
         data={sortedAssets || []}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.assetCard, shadows.sm]}
+          <PressableCard
             onPress={() => handleRowPress(item)}
-            activeOpacity={0.8}
+            accessibilityLabel={`Équipement ${item.designation}`}
+            accessibilityHint="Appuyer pour voir les détails"
           >
             <View style={styles.assetCardHeader}>
               <Text style={styles.assetName} numberOfLines={1}>{item.designation}</Text>
@@ -371,7 +374,7 @@ export default function InventoryScreen() {
               <Text style={styles.detailLabel}>Modèle: <Text style={styles.detailValue}>{item.modele || '-'}</Text></Text>
               <Text style={styles.detailLabel}>Site: <Text style={styles.detailValue}>{item.site_name || '-'}</Text></Text>
             </View>
-          </TouchableOpacity>
+          </PressableCard>
         )}
         contentContainerStyle={styles.listContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}

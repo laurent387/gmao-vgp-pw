@@ -59,8 +59,31 @@ export const routes = {
     pathname: '/nc/[id]' as const,
     params: { id, ...(assetId && { assetId }) },
   }),
+
+  ncCreate: (assetId?: string) => ({
+    pathname: '/nc/create' as const,
+    params: { ...(assetId && { assetId }) },
+  }),
+
+  maintenanceAdd: (assetId?: string) => ({
+    pathname: '/maintenance/add' as const,
+    params: { ...(assetId && { assetId }) },
+  }),
+
+  vgpReport: (id: string) => ({
+    pathname: '/vgp/report/[id]' as const,
+    params: { id },
+  }),
+
+  companySettings: () => '/company-settings',
+  changePassword: () => '/change-password',
   
   // Tab screens with optional filters
+  operations: (tab?: 'vgp' | 'nc' | 'actions' | 'missions') => ({
+    pathname: '/(tabs)/operations' as const,
+    params: { ...(tab && { tab }) },
+  }),
+
   inventory: (siteId?: string, clientId?: string) => ({
     pathname: '/(tabs)/inventory' as const,
     params: { ...(siteId && { siteId }), ...(clientId && { clientId }) },
@@ -92,8 +115,15 @@ export const useNavigation = () => {
       router.push(routes.equipmentDetail(id, siteId, clientId) as any),
     goToMission: (id: string) => router.push(routes.missionDetail(id) as any),
     goToNonConformity: (id: string, assetId?: string) => router.push(routes.ncDetail(id, assetId) as any),
+    goToNCCreate: (assetId?: string) => router.push(routes.ncCreate(assetId) as any),
+    goToMaintenanceAdd: (assetId?: string) => router.push(routes.maintenanceAdd(assetId) as any),
+    goToReport: (id: string) => router.push(routes.vgpReport(id) as any),
+    goToCompanySettings: () => router.push(routes.companySettings() as any),
+    goToChangePassword: () => router.push(routes.changePassword() as any),
     
     // List views with filters
+    goToOperations: (tab?: 'vgp' | 'nc' | 'actions' | 'missions') =>
+      router.push(routes.operations(tab) as any),
     goToInventory: (siteId?: string, clientId?: string) =>
       router.push(routes.inventory(siteId, clientId) as any),
     goToPlanning: (status?: 'overdue' | 'due30', assetId?: string) =>

@@ -34,6 +34,7 @@ import { missionRepository } from '@/repositories/MissionRepository';
 import { webApiService } from '@/services/WebApiService';
 import { NonConformity, Mission, NCStatus, MissionStatus, VGPTemplate } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigation } from '@/lib/navigation';
 import { trpc } from '@/lib/trpc';
 
 type TabType = 'vgp' | 'nc' | 'actions' | 'missions';
@@ -47,6 +48,7 @@ interface AdvancedFilters {
 
 export default function OperationsScreen() {
   const router = useRouter();
+  const nav = useNavigation();
   const { user, canCreate } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('vgp');
   const [filter, setFilter] = useState<FilterType>('all');
@@ -150,27 +152,27 @@ export default function OperationsScreen() {
   }, [activeTab, refetchVGP, refetchNCs, refetchActions, refetchMissions]);
 
   const handleNCPress = (id: string) => {
-    router.push(`/nc/${id}`);
+    nav.goToNonConformity(id);
   };
 
   const handleCreateNC = () => {
-    router.push('/nc/create');
+    nav.goToNCCreate();
   };
 
   const handleMissionPress = (id: string) => {
-    router.push(`/mission/${id}`);
+    nav.goToMission(id);
   };
 
   const handleCreateMission = () => {
-    router.push('/mission/create');
+    nav.push('/mission/create');
   };
 
   const handleStartVGP = () => {
-    router.push('/vgp/start');
+    nav.push('/vgp/start');
   };
 
   const handleViewTemplate = (templateId: string) => {
-    router.push(`/vgp/template/${templateId}`);
+    nav.push(`/vgp/template/${templateId}`);
   };
 
   const renderVGPTemplate = ({ item }: { item: VGPTemplate }) => (

@@ -12,6 +12,7 @@ import { Card, SectionCard } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
+import { ClickableRow, EntityLink, StatChipLink } from '@/components/interactive';
 import { assetRepository } from '@/repositories/AssetRepository';
 import { assetControlRepository } from '@/repositories/ControlRepository';
 import { reportRepository } from '@/repositories/ReportRepository';
@@ -330,21 +331,15 @@ export default function AssetDetailScreen() {
       <SectionCard title="Historique des rapports">
         {reports && reports.length > 0 ? (
           reports.map((report) => (
-            <TouchableOpacity
+            <ClickableRow
               key={report.id}
-              style={styles.reportItem}
-              onPress={() => router.push(`/vgp/report/${report.id}`)}
-              accessibilityLabel="Ouvrir le rapport"
-            >
-              <View style={styles.reportInfo}>
-                <Text style={styles.reportDate}>{formatDate(report.performed_at)}</Text>
-                <StatusBadge status={report.conclusion} />
-              </View>
-              <Text style={styles.reportSummary} numberOfLines={2}>
-                {report.summary || 'Aucun résumé'}
-              </Text>
-              <Text style={styles.reportMeta}>Par: {report.signed_by_name || report.performer}</Text>
-            </TouchableOpacity>
+              icon={<FileText size={18} color={colors.primary} />}
+              title={formatDate(report.performed_at)}
+              subtitle={report.summary || 'Aucun résumé'}
+              rightElement={<StatusBadge status={report.conclusion} />}
+              onPress={() => nav.goToReport(report.id)}
+              accessibilityLabel={`Rapport du ${formatDate(report.performed_at)}`}
+            />
           ))
         ) : (
           <Text style={styles.emptyText}>Aucun rapport</Text>
@@ -361,7 +356,7 @@ export default function AssetDetailScreen() {
           !isReadOnly() && (
             <Button
               title="Nouvelle NC"
-              onPress={() => router.push({ pathname: '/nc/create', params: { assetId: id } })}
+              onPress={() => nav.goToNCCreate(id)}
               size="sm"
               variant="outline"
             />
@@ -370,26 +365,20 @@ export default function AssetDetailScreen() {
       >
         {ncs && ncs.length > 0 ? (
           ncs.map((nc) => (
-            <TouchableOpacity 
-              key={nc.id} 
-              style={styles.ncItem}
-              onPress={() => router.push(`/nc/${nc.id}`)}
-            >
-              <View style={styles.ncHeader}>
-                <Text style={styles.ncTitle} numberOfLines={1}>{nc.title}</Text>
-                <CriticalityBadge level={nc.severity} />
-              </View>
-              <View style={styles.ncFooter}>
-                <StatusBadge status={nc.status} />
-                {(nc as any).action_status && (
-                  <View style={styles.actionStatus}>
-                    <Text style={styles.actionLabel}>Action: </Text>
-                    <StatusBadge status={(nc as any).action_status} />
-                  </View>
-                )}
-              </View>
-              <Text style={styles.ncDate}>{formatDate(nc.created_at)}</Text>
-            </TouchableOpacity>
+            <ClickableRow
+              key={nc.id}
+              icon={<AlertTriangle size={18} color={nc.severity >= 3 ? colors.danger : colors.warning} />}
+              title={nc.title}
+              subtitle={formatDate(nc.created_at)}
+              rightElement={
+                <View style={{ flexDirection: 'row', gap: spacing.xs, alignItems: 'center' }}>
+                  <CriticalityBadge level={nc.severity} />
+                  <StatusBadge status={nc.status} />
+                </View>
+              }
+              onPress={() => nav.goToNonConformity(nc.id, id)}
+              accessibilityLabel={`Non-conformité: ${nc.title}`}
+            />
           ))
         ) : (
           <Text style={styles.emptyText}>Aucune non-conformité</Text>
@@ -437,7 +426,7 @@ export default function AssetDetailScreen() {
           !isReadOnly() && (
             <Button
               title="Ajouter"
-              onPress={() => router.push({ pathname: '/maintenance/add', params: { assetId: id } })}
+              onPress={() => nav.goToMaintenanceAdd(id)}
               size="sm"
               variant="outline"
             />

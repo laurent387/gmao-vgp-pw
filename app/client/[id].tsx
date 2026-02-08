@@ -105,8 +105,8 @@ export default function ClientProfileScreen() {
   };
 
   const handleViewReports = () => {
-    // Navigate to missions list (client filter not yet supported)
-    nav.goToMissions();
+    // Navigate to operations tab (missions)
+    nav.goToOperations('missions');
   };
 
   const handleViewNextDue = () => {

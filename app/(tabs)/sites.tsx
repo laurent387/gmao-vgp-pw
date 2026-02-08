@@ -9,6 +9,7 @@ import { Card } from '@/components/Card';
 import { DataTable, type Column } from '@/components/DataTable';
 import { DesktopFilterBar } from '@/components/DesktopFilterBar';
 import { SearchInput } from '@/components/Input';
+import { ClickableRow, StatChipLink } from '@/components/interactive';
 import { useIsDesktop } from '@/hooks/useResponsive';
 import { assetRepository } from '@/repositories/AssetRepository';
 import { clientRepository, siteRepository } from '@/repositories/SiteRepository';
@@ -170,7 +171,7 @@ export default function ClientSitesScreen() {
   };
 
   const handleRowPress = (site: any) => {
-    router.push({ pathname: '/(tabs)/inventory', params: { siteId: site.id, clientId: site.client_id } });
+    nav.goToInventory(site.id, site.client_id);
   };
 
   const toggleExpanded = useCallback((clientId: string) => {
@@ -180,9 +181,9 @@ export default function ClientSitesScreen() {
   const openSite = useCallback(
     (siteId: string, clientId: string) => {
       console.log('[CLIENT_SITES] open site', { siteId, clientId });
-      router.push({ pathname: '/(tabs)/inventory', params: { siteId, clientId } });
+      nav.goToInventory(siteId, clientId);
     },
-    [router]
+    [nav]
   );
 
   const renderClient = ({ item }: { item: ClientRow }) => {

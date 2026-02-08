@@ -329,7 +329,7 @@ export default function AdminScreen() {
           <View style={styles.headerActions}>
             <Button
               title="Entreprise"
-              onPress={() => router.push('/company-settings')}
+              onPress={() => nav.goToCompanySettings()}
               size="sm"
               variant="outline"
               icon={<Building2 size={16} color={colors.primary} />}
@@ -380,10 +380,10 @@ export default function AdminScreen() {
                   client={c as unknown as ClientType}
                   userRole={userRole}
                   variant="compact"
-                  onPress={() => router.push(`/client/${c.id}`)}
+                  onPress={() => nav.goToClient(c.id)}
                 />
                 <View style={styles.clientActions}>
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/client/${c.id}`)}>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => nav.goToClient(c.id)}>
                     <Eye size={16} color={colors.primary} />
                   </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(c)}>
@@ -400,7 +400,7 @@ export default function AdminScreen() {
               <TouchableOpacity 
                 key={s.id} 
                 style={styles.listItem}
-                onPress={() => nav.goToInventory({ siteId: s.id })}
+                onPress={() => nav.goToInventory(s.id)}
                 activeOpacity={0.7}
               >
                 <View style={styles.listItemContent}>

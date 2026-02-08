@@ -2,11 +2,13 @@ import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, RefreshControl, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, Calendar } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, Calendar, ChevronRight } from 'lucide-react-native';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
 import { DataTable, type Column } from '@/components/DataTable';
 import { useIsDesktop } from '@/hooks/useResponsive';
 import { EmptyState, LoadingState } from '@/components/EmptyState';
+import { PressableCard } from '@/components/interactive';
+import { useNavigation } from '@/lib/navigation';
 import { assetControlRepository } from '@/repositories/ControlRepository';
 import { DueEcheance } from '@/types';
 
@@ -19,6 +21,7 @@ interface TimelineItem extends DueEcheance {
 
 export default function PlanningScreen() {
   const router = useRouter();
+  const nav = useNavigation();
   const params = useLocalSearchParams<{ status?: string }>();
   const isDesktop = useIsDesktop();
   const mapStatusToFilter = (status?: string): FilterType => {
@@ -120,7 +123,7 @@ export default function PlanningScreen() {
   }, [timelineData, sortConfig]);
 
   const handleRowPress = (item: TimelineItem) => {
-    router.push(`/asset/${item.asset_id}`);
+    nav.goToEquipment(item.asset_id);
   };
 
   if (isLoading) {
@@ -294,14 +297,15 @@ export default function PlanningScreen() {
                 </View>
               )}
 
-              <TouchableOpacity
+              <PressableCard
+                onPress={() => handleRowPress(item)}
                 style={[
                   styles.timelineCard,
                   { borderLeftColor: item.sectionColor },
                   isLastInSection && styles.timelineCardLast,
                 ]}
-                onPress={() => handleRowPress(item)}
-                activeOpacity={0.8}
+                accessibilityLabel={`${item.asset_designation} - ${item.control_type_label}`}
+                accessibilityHint="Appuyer pour voir l'équipement"
               >
                 <View style={styles.timelineContent}>
                   <View style={styles.timelineTop}>
@@ -332,9 +336,9 @@ export default function PlanningScreen() {
                 </View>
 
                 <View style={styles.timelineChevron}>
-                  <Text style={styles.chevronText}>›</Text>
+                  <ChevronRight size={16} color={colors.textMuted} />
                 </View>
-              </TouchableOpacity>
+              </PressableCard>
             </View>
           );
         }}

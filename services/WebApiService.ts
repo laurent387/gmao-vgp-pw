@@ -426,6 +426,16 @@ class WebApiService {
       console.error('[WebAPI] Error updating action status:', e);
     }
   }
+
+  async updateAction(id: string, data: Partial<{ owner: string; description: string; due_at: string }>): Promise<void> {
+    console.log('[WebAPI] Updating action:', id, data);
+    try {
+      await import('@/app/api').then(m => m.updateAction(id, data));
+    } catch (e) {
+      console.error('[WebAPI] Error updating action:', e);
+      throw e;
+    }
+  }
 }
 
 export const webApiService = new WebApiService();

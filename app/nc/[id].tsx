@@ -310,12 +310,20 @@ export default function NCDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showActionModal, setShowActionModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [isEditingAction, setIsEditingAction] = useState(false);
   const [editForm, setEditForm] = useState({
     title: '',
     description: '',
     severity: 3 as 1 | 2 | 3,
     status: 'OUVERTE' as 'OUVERTE' | 'EN_COURS' | 'CLOTUREE',
   });
+  const [editActionForm, setEditActionForm] = useState({
+    owner: '',
+    ownerId: '',
+    description: '',
+    dueAt: '',
+  });
+  const [showActionOwnerPicker, setShowActionOwnerPicker] = useState(false);
 
   const { data: nc, isLoading, refetch } = useQuery<NonConformity | null>({
     queryKey: ['nc', id],
@@ -482,6 +490,41 @@ export default function NCDetailScreen() {
     },
     onError: (error) => {
       Alert.alert('Erreur', error instanceof Error ? error.message : 'Erreur');
+    },
+  });
+
+  // Mutation to edit corrective action details (owner, description, due_at)
+  const editActionMutation = useMutation({
+    mutationFn: async () => {
+      if (!nc?.corrective_action) throw new Error('Pas d\'action corrective');
+      if (!editActionForm.owner) throw new Error('Le responsable est requis');
+      if (!editActionForm.dueAt) throw new Error('L\'échéance est requise');
+
+      const updates: Partial<CorrectiveAction> = {
+        owner: editActionForm.owner,
+        description: editActionForm.description,
+        due_at: editActionForm.dueAt,
+      };
+
+      if (Platform.OS === 'web') {
+        await webApiService.updateAction(nc.corrective_action.id, updates);
+      } else {
+        await actionRepository.update(nc.corrective_action.id, updates);
+        await syncService.addToOutbox('UPDATE_ACTION', {
+          id: nc.corrective_action.id,
+          ...updates,
+          ncId: id,
+        });
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['nc', id] });
+      queryClient.invalidateQueries({ queryKey: ['nonconformities'] });
+      setIsEditingAction(false);
+      Alert.alert('Succès', 'Action corrective mise à jour');
+    },
+    onError: (error) => {
+      Alert.alert('Erreur', error instanceof Error ? error.message : 'Erreur lors de la mise à jour');
     },
   });
 
@@ -911,58 +954,194 @@ export default function NCDetailScreen() {
           </SectionCard>
 
           {action && (
-            <SectionCard title="Action corrective">
-              <View style={styles.actionHeader}>
-                <StatusBadge status={action.status} />
-                {action.due_at && new Date(action.due_at) < new Date() && action.status !== 'VALIDEE' && (
-                  <View style={styles.overdueBadge}>
-                    <Text style={styles.overdueText}>En retard</Text>
+            <SectionCard 
+              title="Action corrective"
+              action={
+                action.status !== 'VALIDEE' && canEdit() && !isReadOnly() && !isEditingAction ? (
+                  <TouchableOpacity
+                    style={styles.actionEditBtn}
+                    onPress={() => {
+                      setEditActionForm({
+                        owner: action.owner || '',
+                        ownerId: '',
+                        description: action.description || '',
+                        dueAt: action.due_at ? action.due_at.substring(0, 10) : '',
+                      });
+                      setIsEditingAction(true);
+                    }}
+                  >
+                    <Edit3 size={16} color={colors.primary} />
+                    <Text style={styles.actionEditBtnText}>Modifier</Text>
+                  </TouchableOpacity>
+                ) : undefined
+              }
+            >
+              {isEditingAction ? (
+                /* === MODE ÉDITION ACTION === */
+                <View>
+                  <View style={styles.actionHeader}>
+                    <StatusBadge status={action.status} />
                   </View>
-                )}
-              </View>
 
-              <View style={styles.infoRow}>
-                <User size={16} color={colors.textMuted} />
-                <Text style={styles.infoLabel}>Responsable:</Text>
-                <Text style={styles.infoValue}>{action.owner}</Text>
-              </View>
+                  {/* Responsable */}
+                  <View style={styles.editField}>
+                    <Text style={styles.editLabel}>Responsable *</Text>
+                    <TouchableOpacity
+                      style={modalStyles.selector}
+                      onPress={() => setShowActionOwnerPicker(true)}
+                    >
+                      <User size={18} color={editActionForm.owner ? colors.primary : colors.textMuted} />
+                      <Text style={[
+                        modalStyles.selectorText,
+                        !editActionForm.owner && modalStyles.selectorPlaceholder
+                      ]}>
+                        {editActionForm.owner || 'Sélectionner un responsable'}
+                      </Text>
+                      <ArrowRight size={18} color={colors.textMuted} />
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={styles.infoRow}>
-                <Calendar size={16} color={colors.textMuted} />
-                <Text style={styles.infoLabel}>Échéance:</Text>
-                <Text style={[
-                  styles.infoValue,
-                  action.due_at && new Date(action.due_at) < new Date() && action.status !== 'VALIDEE' && styles.overdueValue
-                ]}>
-                  {formatDate(action.due_at)}
-                </Text>
-              </View>
+                  {/* Description */}
+                  <View style={styles.editField}>
+                    <Text style={styles.editLabel}>Description</Text>
+                    <TextInput
+                      style={[styles.editInput, styles.editTextarea]}
+                      value={editActionForm.description}
+                      onChangeText={(text) => setEditActionForm(prev => ({ ...prev, description: text }))}
+                      placeholder="Description de l'action à réaliser"
+                      placeholderTextColor={colors.textMuted}
+                      multiline
+                      numberOfLines={3}
+                    />
+                  </View>
 
-              {action.description && (
-                <Text style={styles.actionDescription}>{action.description}</Text>
-              )}
+                  {/* Échéance */}
+                  <View style={styles.editField}>
+                    <Text style={styles.editLabel}>Échéance * (AAAA-MM-JJ)</Text>
+                    <TextInput
+                      style={styles.editInput}
+                      value={editActionForm.dueAt}
+                      onChangeText={(text) => setEditActionForm(prev => ({ ...prev, dueAt: text }))}
+                      placeholder="2026-03-15"
+                      placeholderTextColor={colors.textMuted}
+                    />
+                  </View>
 
-              {action.closed_at && (
-                <View style={styles.infoRow}>
-                  <CheckCircle size={16} color={colors.success} />
-                  <Text style={styles.infoLabel}>Clôturée le:</Text>
-                  <Text style={styles.infoValue}>{formatDate(action.closed_at)}</Text>
+                  {/* Boutons sauvegarder / annuler */}
+                  <View style={styles.editActionButtons}>
+                    <Button
+                      title="Annuler"
+                      onPress={() => setIsEditingAction(false)}
+                      variant="outline"
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title="Enregistrer"
+                      onPress={() => editActionMutation.mutate()}
+                      loading={editActionMutation.isPending}
+                      disabled={!editActionForm.owner || !editActionForm.dueAt}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
+                </View>
+              ) : (
+                /* === MODE LECTURE ACTION === */
+                <View>
+                  <View style={styles.actionHeader}>
+                    <StatusBadge status={action.status} />
+                    {action.due_at && new Date(action.due_at) < new Date() && action.status !== 'VALIDEE' && (
+                      <View style={styles.overdueBadge}>
+                        <Text style={styles.overdueText}>En retard</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <User size={16} color={colors.textMuted} />
+                    <Text style={styles.infoLabel}>Responsable:</Text>
+                    <Text style={styles.infoValue}>{action.owner}</Text>
+                  </View>
+
+                  <View style={styles.infoRow}>
+                    <Calendar size={16} color={colors.textMuted} />
+                    <Text style={styles.infoLabel}>Échéance:</Text>
+                    <Text style={[
+                      styles.infoValue,
+                      action.due_at && new Date(action.due_at) < new Date() && action.status !== 'VALIDEE' && styles.overdueValue
+                    ]}>
+                      {formatDate(action.due_at)}
+                    </Text>
+                  </View>
+
+                  {action.description && (
+                    <Text style={styles.actionDescription}>{action.description}</Text>
+                  )}
+
+                  {action.closed_at && (
+                    <View style={styles.infoRow}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={styles.infoLabel}>Clôturée le:</Text>
+                      <Text style={styles.infoValue}>{formatDate(action.closed_at)}</Text>
+                    </View>
+                  )}
+
+                  {action.validated_by && (
+                    <View style={styles.infoRow}>
+                      <CheckCircle size={16} color={colors.success} />
+                      <Text style={styles.infoLabel}>Validée par:</Text>
+                      <Text style={styles.infoValue}>{action.validated_by}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.actionButtons}>
+                    {getNextActionButton()}
+                  </View>
                 </View>
               )}
-
-              {action.validated_by && (
-                <View style={styles.infoRow}>
-                  <CheckCircle size={16} color={colors.success} />
-                  <Text style={styles.infoLabel}>Validée par:</Text>
-                  <Text style={styles.infoValue}>{action.validated_by}</Text>
-                </View>
-              )}
-
-              <View style={styles.actionButtons}>
-                {getNextActionButton()}
-              </View>
             </SectionCard>
           )}
+
+          {/* Modal picker pour responsable d'action (mode édition) */}
+          <Modal visible={showActionOwnerPicker} transparent animationType="fade">
+            <View style={modalStyles.pickerOverlay}>
+              <View style={modalStyles.pickerContainer}>
+                <View style={modalStyles.pickerHeader}>
+                  <Text style={modalStyles.pickerTitle}>Sélectionner un responsable</Text>
+                  <TouchableOpacity onPress={() => setShowActionOwnerPicker(false)}>
+                    <X size={24} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={modalStyles.pickerList}>
+                  {responsibleUsers?.map((u) => (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={[
+                        modalStyles.pickerOption,
+                        editActionForm.owner === u.name && modalStyles.pickerOptionSelected,
+                      ]}
+                      onPress={() => {
+                        setEditActionForm(prev => ({ ...prev, owner: u.name, ownerId: u.id }));
+                        setShowActionOwnerPicker(false);
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[
+                          modalStyles.pickerOptionName,
+                          editActionForm.owner === u.name && modalStyles.pickerOptionNameSelected,
+                        ]}>
+                          {u.name}
+                        </Text>
+                        <Text style={modalStyles.pickerOptionEmail}>{u.email}</Text>
+                      </View>
+                      {editActionForm.owner === u.name && (
+                        <CheckCircle size={22} color={colors.success} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
 
           {!action && canEdit() && !isReadOnly() && (
             <View style={styles.noAction}>
@@ -1162,6 +1341,23 @@ const styles = StyleSheet.create({
   actionButtons: {
     marginTop: spacing.lg,
     gap: spacing.md,
+  },
+  actionEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+  },
+  actionEditBtnText: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
+  },
+  editActionButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    marginTop: spacing.lg,
   },
   noAction: {
     alignItems: 'center',

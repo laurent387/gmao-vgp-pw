@@ -9,6 +9,11 @@ import { EmptyState, LoadingState } from '@/components/EmptyState';
 import { syncService, SyncResult } from '@/services/SyncService';
 import { OutboxItem } from '@/types';
 
+interface PullResult {
+  success: boolean;
+  counts: Record<string, number>;
+}
+
 export default function SyncScreen() {
   const queryClient = useQueryClient();
   const [refreshing, setRefreshing] = useState(false);
@@ -41,6 +46,25 @@ export default function SyncScreen() {
     },
     onError: (error) => {
       Alert.alert('Erreur', 'La synchronisation a échoué');
+    },
+  });
+
+  const pullMutation = useMutation<PullResult>({
+    mutationFn: () => syncService.pullAndPersist(),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries();
+      if (result.success) {
+        const summary = Object.entries(result.counts)
+          .filter(([, c]) => c > 0)
+          .map(([t, c]) => `${t}: ${c}`)
+          .join('\n');
+        Alert.alert('Données récupérées', summary || 'Aucune nouvelle donnée');
+      } else {
+        Alert.alert('Erreur', 'La récupération des données a échoué');
+      }
+    },
+    onError: () => {
+      Alert.alert('Erreur', 'Impossible de contacter le serveur');
     },
   });
 
@@ -136,7 +160,15 @@ export default function SyncScreen() {
 
         <View style={styles.actions}>
           <Button
-            title="Synchroniser"
+            title="Récupérer les données"
+            onPress={() => pullMutation.mutate()}
+            loading={pullMutation.isPending}
+            variant="outline"
+            icon={<RefreshCw size={18} color={colors.primary} />}
+            fullWidth
+          />
+          <Button
+            title="Envoyer les modifications"
             onPress={() => syncMutation.mutate()}
             loading={syncMutation.isPending}
             disabled={pendingItems.length === 0}

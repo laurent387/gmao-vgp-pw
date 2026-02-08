@@ -343,9 +343,16 @@ export const syncRouter = createTRPCRouter({
       console.log(`[SYNC] Pull request since ${input.lastSyncAt || "beginning"}`);
 
       const since = input.lastSyncAt ? new Date(input.lastSyncAt) : new Date(0);
-      const entities = input.entities || ["sites", "zones", "assets", "controlTypes", "missions", "users"];
+      const entities = input.entities || ["clients", "sites", "zones", "assets", "controlTypes", "missions", "users", "assetControls"];
 
       const changes: Record<string, any[]> = {};
+
+      if (entities.includes("clients")) {
+        changes.clients = await pgQuery(
+          "SELECT * FROM clients ORDER BY created_at",
+          []
+        );
+      }
 
       if (entities.includes("users")) {
         changes.users = await pgQuery(
@@ -456,6 +463,13 @@ export const syncRouter = createTRPCRouter({
       if (entities.includes("checklistItems")) {
         changes.checklistItems = await pgQuery(
           "SELECT * FROM checklist_items ORDER BY template_id, sort_order",
+          []
+        );
+      }
+
+      if (entities.includes("assetControls")) {
+        changes.assetControls = await pgQuery(
+          "SELECT * FROM asset_controls",
           []
         );
       }

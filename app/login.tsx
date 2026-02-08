@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
 import { colors, spacing, borderRadius, typography } from '@/constants/theme';
+import { syncService } from '@/services/SyncService';
 
 
 export default function LoginScreen() {
@@ -47,6 +48,15 @@ export default function LoginScreen() {
     const result = await login(trimmedEmail, password);
     
     if (result.success) {
+      // Initial data sync from server after login
+      try {
+        console.log('[LOGIN] Starting initial data sync...');
+        await syncService.pullAndPersist();
+        console.log('[LOGIN] Initial data sync complete');
+      } catch (e) {
+        console.warn('[LOGIN] Initial sync failed, continuing anyway:', e);
+      }
+
       if (result.mustChangePassword) {
         router.replace('/change-password');
       } else {

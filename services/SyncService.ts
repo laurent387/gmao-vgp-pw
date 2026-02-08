@@ -5,6 +5,7 @@ import { outboxRepository } from '@/repositories/OutboxRepository';
 import { documentRepository } from '@/repositories/DocumentRepository';
 import { OutboxItem } from '@/types';
 import { trpcClient } from '@/lib/trpc';
+import { getDatabase } from '@/db/database';
 
 export interface SyncResult {
   success: boolean;
@@ -130,11 +131,13 @@ class SyncService {
       const response = await trpcClient.sync.pull.query({
         lastSyncAt,
         entities: [
+          'clients',
           'users',
           'sites',
           'zones',
           'assets',
           'controlTypes',
+          'assetControls',
           'missions',
           'nonconformities',
           'correctiveActions',
@@ -151,6 +154,131 @@ class SyncService {
       const error = e instanceof Error ? e.message : 'Unknown error';
       console.error('[SYNC] Pull failed:', error);
       throw e;
+    }
+  }
+
+  async pullAndPersist(): Promise<{ success: boolean; counts: Record<string, number> }> {
+    if (Platform.OS === 'web') {
+      console.log('[SYNC] pullAndPersist skipped on web');
+      return { success: true, counts: {} };
+    }
+
+    console.log('[SYNC] Pull & persist starting...');
+    const counts: Record<string, number> = {};
+
+    try {
+      const { changes } = await this.pull();
+      const db = await getDatabase();
+
+      // Helper: upsert rows by deleting then inserting
+      const upsert = async (table: string, rows: any[], columns: string[]) => {
+        if (!rows || rows.length === 0) return;
+        for (const row of rows) {
+          const vals = columns.map(c => {
+            const v = row[c];
+            if (v === undefined || v === null) return null;
+            if (typeof v === 'boolean') return v ? 1 : 0;
+            if (typeof v === 'object') return JSON.stringify(v);
+            return v;
+          });
+          const placeholders = columns.map(() => '?').join(', ');
+          await db.runAsync(
+            `INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`,
+            vals
+          );
+        }
+        counts[table] = rows.length;
+      };
+
+      // Order matters: respect foreign keys
+      if (changes.clients) {
+        await upsert('clients', changes.clients, ['id', 'name', 'created_at']);
+      }
+
+      if (changes.users) {
+        await upsert('users', changes.users, ['id', 'email', 'name', 'role', 'created_at']);
+      }
+
+      if (changes.sites) {
+        await upsert('sites', changes.sites, ['id', 'client_id', 'name', 'address', 'created_at']);
+      }
+
+      if (changes.zones) {
+        await upsert('zones', changes.zones, ['id', 'site_id', 'name']);
+      }
+
+      if (changes.assets) {
+        await upsert('assets', changes.assets, [
+          'id', 'code_interne', 'designation', 'categorie', 'marque', 'modele',
+          'numero_serie', 'annee', 'statut', 'criticite', 'site_id', 'zone_id',
+          'mise_en_service', 'created_at', 'vgp_enabled', 'vgp_validity_months'
+        ]);
+      }
+
+      if (changes.controlTypes) {
+        await upsert('control_types', changes.controlTypes, [
+          'id', 'code', 'label', 'description', 'periodicity_days', 'active'
+        ]);
+      }
+
+      if (changes.assetControls) {
+        await upsert('asset_controls', changes.assetControls, [
+          'id', 'asset_id', 'control_type_id', 'start_date', 'last_done_at', 'next_due_at'
+        ]);
+      }
+
+      if (changes.missions) {
+        await upsert('missions', changes.missions, [
+          'id', 'control_type_id', 'scheduled_at', 'assigned_to', 'status', 'site_id', 'created_at'
+        ]);
+      }
+
+      if (changes.checklistTemplates) {
+        await upsert('checklist_templates', changes.checklistTemplates, [
+          'id', 'control_type_id', 'asset_category', 'name'
+        ]);
+      }
+
+      if (changes.checklistItems) {
+        await upsert('checklist_items', changes.checklistItems, [
+          'id', 'template_id', 'label', 'field_type', 'required', 'help_text', 'sort_order'
+        ]);
+      }
+
+      if (changes.reports) {
+        await upsert('reports', changes.reports, [
+          'id', 'mission_id', 'asset_id', 'performed_at', 'performer',
+          'conclusion', 'summary', 'signed_by_name', 'signed_at', 'created_at'
+        ]);
+      }
+
+      if (changes.nonconformities) {
+        await upsert('nonconformities', changes.nonconformities, [
+          'id', 'report_id', 'asset_id', 'checklist_item_id', 'title',
+          'description', 'severity', 'status', 'created_at'
+        ]);
+      }
+
+      if (changes.correctiveActions) {
+        await upsert('corrective_actions', changes.correctiveActions, [
+          'id', 'nonconformity_id', 'owner', 'description', 'due_at',
+          'status', 'closed_at', 'validated_by'
+        ]);
+      }
+
+      if (changes.maintenanceLogs) {
+        await upsert('maintenance_logs', changes.maintenanceLogs, [
+          'id', 'asset_id', 'date', 'actor', 'operation_type',
+          'description', 'parts_ref', 'created_at'
+        ]);
+      }
+
+      console.log('[SYNC] Pull & persist complete:', counts);
+      return { success: true, counts };
+    } catch (e) {
+      const error = e instanceof Error ? e.message : 'Unknown error';
+      console.error('[SYNC] Pull & persist failed:', error);
+      return { success: false, counts };
     }
   }
 

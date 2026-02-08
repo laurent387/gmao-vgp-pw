@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import superjson from "superjson";
+import jwt from "jsonwebtoken";
 import { pgQuery } from "../db/postgres";
 
 type UserRole = 'ADMIN' | 'HSE_MANAGER' | 'TECHNICIAN' | 'AUDITOR';
@@ -39,6 +40,7 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
 
   if (token) {
     try {
+      // Try token-{userId} format first
       if (token.startsWith("token-")) {
         const parts = token.split("-");
         const userId = parts[1];
@@ -51,6 +53,29 @@ export const createContext = async (opts: FetchCreateContextFnOptions) => {
         }
       }
 
+      // Try JWT token (from Fastify API)
+      if (!user && token.startsWith("eyJ")) {
+        try {
+          const jwtSecret = process.env.JWT_SECRET || 'dev-secret';
+          const decoded = jwt.verify(token, jwtSecret) as any;
+          const userId = decoded.userId || decoded.sub || decoded.id;
+          
+          if (userId) {
+            const users = await pgQuery<DbUser>(
+              "SELECT id, email, name, role, token_mock FROM users WHERE id = $1",
+              [userId]
+            );
+            user = users[0] || null;
+            if (user) {
+              console.log("[CTX] JWT validated for user:", user.email, "role:", user.role);
+            }
+          }
+        } catch (jwtError) {
+          console.warn("[CTX] JWT verification failed:", jwtError instanceof Error ? jwtError.message : jwtError);
+        }
+      }
+
+      // Fallback: try token_mock in database
       if (!user) {
         const users = await pgQuery<DbUser>(
           "SELECT id, email, name, role, token_mock FROM users WHERE token_mock = $1",

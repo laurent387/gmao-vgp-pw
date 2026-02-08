@@ -114,6 +114,8 @@ async function main() {
   await zonesRoutes(fastify, db);
   const { dashboardRoutes } = await import('./routes/dashboard.js');
   await dashboardRoutes(fastify, db);
+  const { syncRoutes } = await import('./routes/sync.js');
+  await syncRoutes(fastify, db);
 
   await fastify.listen({ port: 4000, host: '0.0.0.0' });
   console.log('🚀 Fastify API running on http://localhost:4000');

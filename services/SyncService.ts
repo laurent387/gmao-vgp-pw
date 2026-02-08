@@ -6,6 +6,7 @@ import { documentRepository } from '@/repositories/DocumentRepository';
 import { OutboxItem } from '@/types';
 import { trpcClient } from '@/lib/trpc';
 import { getDatabase } from '@/db/database';
+import { api } from '@/app/api';
 
 export interface SyncResult {
   success: boolean;
@@ -124,36 +125,19 @@ class SyncService {
     return result;
   }
 
-  async pull(lastSyncAt?: string): Promise<{ timestamp: string; changes: Record<string, any[]> }> {
-    console.log('[SYNC] Pulling changes since:', lastSyncAt || 'beginning');
+  async pull(): Promise<{ timestamp: string; changes: Record<string, any[]> }> {
+    console.log('[SYNC] Pulling all data via Fastify REST...');
 
     try {
-      const response = await trpcClient.sync.pull.query({
-        lastSyncAt,
-        entities: [
-          'clients',
-          'users',
-          'sites',
-          'zones',
-          'assets',
-          'controlTypes',
-          'assetControls',
-          'missions',
-          'nonconformities',
-          'correctiveActions',
-          'reports',
-          'maintenanceLogs',
-          'checklistTemplates',
-          'checklistItems',
-        ],
-      });
+      const response = await api.get('/sync/pull');
+      const data = response.data;
 
-      console.log('[SYNC] Pull complete, timestamp:', response.timestamp);
-      return response;
-    } catch (e) {
-      const error = e instanceof Error ? e.message : 'Unknown error';
+      console.log('[SYNC] Pull complete, timestamp:', data.timestamp);
+      return data;
+    } catch (e: any) {
+      const error = e?.response?.data?.error || e?.message || 'Unknown error';
       console.error('[SYNC] Pull failed:', error);
-      throw e;
+      throw new Error(`Pull failed: ${error}`);
     }
   }
 

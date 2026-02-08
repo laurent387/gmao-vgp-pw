@@ -33,12 +33,16 @@ sudo systemctl stop in-spectra-api || true
 echo "Arrêt de in-spectra-trpc..."
 sudo systemctl stop in-spectra-trpc || true
 
+echo "Arrêt de nginx..."
+sudo systemctl stop nginx || true
+
 echo -e "${GREEN}✅ Services arrêtés${NC}"
 echo ""
 
 echo -e "${YELLOW}📋 Étape 3: Désactivation des services systemd${NC}"
 sudo systemctl disable in-spectra-api || true
 sudo systemctl disable in-spectra-trpc || true
+sudo systemctl disable nginx || true
 echo -e "${GREEN}✅ Services désactivés${NC}"
 echo ""
 
@@ -79,10 +83,12 @@ echo -e "${GREEN}🎉 Migration terminée !${NC}"
 echo ""
 echo "📝 Prochaines étapes:"
 echo "  1. Vérifier les logs: docker-compose logs -f"
-echo "  2. Tester l'application web: https://api.in-spectra.com"
-echo "  3. Si tout fonctionne, désactiver le Nginx systemd:"
-echo "     sudo systemctl stop nginx"
-echo "     sudo systemctl disable nginx"
+echo "  2. Tester les domaines:"
+echo "     - Landing: https://in-spectra.com"
+echo "     - App: https://app.in-spectra.com"
+echo "     - API: https://api.in-spectra.com"
+echo "  3. Si tout fonctionne, nettoyer les services systemd:"
+echo "     ./cleanup-systemd.sh"
 echo ""
 echo "📦 Backup disponible dans: $BACKUP_DIR"
 echo ""
@@ -90,4 +96,4 @@ echo "🔄 Commandes utiles:"
 echo "  - Voir les logs: docker-compose logs -f"
 echo "  - Redémarrer: docker-compose restart"
 echo "  - Arrêter: docker-compose down"
-echo "  - Restaurer systemd: sudo systemctl start in-spectra-api in-spectra-trpc"
+echo "  - Restaurer systemd: sudo systemctl start in-spectra-api in-spectra-trpc nginx"

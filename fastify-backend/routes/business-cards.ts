@@ -391,15 +391,15 @@ export async function businessCardRoutes(fastify: FastifyInstance, db: Client) {
       display: flex;
       align-items: center;
       gap: 16px;
+      padding: 4px 0;
     }
     .brand img {
-      height: 48px;
-      width: 48px;
+      height: 56px;
+      max-width: 180px;
       object-fit: contain;
-      border-radius: 12px;
-      background: #f3f4f6;
+      object-position: left center;
     }
-    .brand h2 { margin: 0; font-size: 18px; letter-spacing: 0.4px; }
+    .brand h2 { margin: 0; font-size: 18px; letter-spacing: 0.4px; font-weight: 600; }
     .profile {
       display: grid;
       gap: 10px;

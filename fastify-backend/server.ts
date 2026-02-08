@@ -61,20 +61,21 @@ async function main() {
   await fastify.register(fastifyStatic, {
     root: process.env.UPLOADS_DIR || '/home/deploy/rork-in-spectra-asset---control/uploads',
     prefix: '/uploads/',
-    decorateReply: false, // To avoid conflicts if registered multiple times
+    decorateReply: false,
   });
 
   // Static file serving for web frontend (SPA)
+  const webDistPath = '/home/deploy/rork-in-spectra-asset---control/web-dist';
   await fastify.register(fastifyStatic, {
-    root: '/home/deploy/rork-in-spectra-asset---control/web-dist',
+    root: webDistPath,
     prefix: '/',
-    decorateReply: false,
+    decorateReply: true,
   });
 
   // SPA fallback for client-side routing
   fastify.setNotFoundHandler((request, reply) => {
-    if (!request.url.startsWith('/api') && !request.url.startsWith('/uploads')) {
-      return reply.sendFile('index.html');
+    if (!request.url.startsWith('/api') && !request.url.startsWith('/uploads') && !request.url.startsWith('/health')) {
+      return reply.sendFile('index.html', { root: webDistPath });
     }
     return reply.code(404).send({ error: 'Not Found' });
   });

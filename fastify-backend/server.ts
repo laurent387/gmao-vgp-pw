@@ -64,6 +64,21 @@ async function main() {
     decorateReply: false, // To avoid conflicts if registered multiple times
   });
 
+  // Static file serving for web frontend (SPA)
+  await fastify.register(fastifyStatic, {
+    root: '/home/deploy/rork-in-spectra-asset---control/web-dist',
+    prefix: '/',
+    decorateReply: false,
+  });
+
+  // SPA fallback for client-side routing
+  fastify.setNotFoundHandler((request, reply) => {
+    if (!request.url.startsWith('/api') && !request.url.startsWith('/uploads')) {
+      return reply.sendFile('index.html');
+    }
+    return reply.code(404).send({ error: 'Not Found' });
+  });
+
   // Health check
   fastify.get('/health', async () => ({ status: 'ok' }));
 

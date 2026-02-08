@@ -37,7 +37,18 @@ export async function initializeDatabase(): Promise<void> {
     CREATE TABLE IF NOT EXISTS clients (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      siret TEXT,
+      tva_number TEXT,
+      contact_name TEXT,
+      contact_email TEXT,
+      contact_phone TEXT,
+      address TEXT,
+      access_instructions TEXT,
+      billing_address TEXT,
+      billing_email TEXT,
+      internal_notes TEXT,
+      status TEXT NOT NULL DEFAULT 'ACTIVE'
     );
 
     CREATE TABLE IF NOT EXISTS sites (
@@ -73,6 +84,11 @@ export async function initializeDatabase(): Promise<void> {
       zone_id TEXT NOT NULL,
       mise_en_service TEXT,
       created_at TEXT NOT NULL,
+      force_nominale TEXT,
+      compteur_type TEXT,
+      compteur_valeur INTEGER,
+      caracteristiques TEXT,
+      dispositifs_protection TEXT,
       FOREIGN KEY (site_id) REFERENCES sites(id),
       FOREIGN KEY (zone_id) REFERENCES zones(id)
     );
@@ -154,6 +170,20 @@ export async function initializeDatabase(): Promise<void> {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       FOREIGN KEY (mission_id) REFERENCES missions(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS mission_operation_assets (
+      id INTEGER PRIMARY KEY,
+      mission_id TEXT NOT NULL,
+      operation_type TEXT NOT NULL,
+      asset_id TEXT NOT NULL,
+      work_description TEXT,
+      checklist_template_id INTEGER,
+      checklist_data TEXT DEFAULT '[]',
+      created_at TEXT,
+      updated_at TEXT,
+      FOREIGN KEY (mission_id) REFERENCES missions(id),
+      FOREIGN KEY (asset_id) REFERENCES assets(id)
     );
 
     CREATE TABLE IF NOT EXISTS reports (
@@ -281,6 +311,39 @@ export async function initializeDatabase(): Promise<void> {
   } catch (e) {
     // ignore
   }
+
+  // Add missing client columns for existing databases
+  const clientCols = ['siret', 'tva_number', 'contact_name', 'contact_email', 'contact_phone', 'address', 'access_instructions', 'billing_address', 'billing_email', 'internal_notes'];
+  for (const col of clientCols) {
+    try { await database.execAsync(`ALTER TABLE clients ADD COLUMN ${col} TEXT;`); } catch (e) { /* ignore */ }
+  }
+  try { await database.execAsync(`ALTER TABLE clients ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';`); } catch (e) { /* ignore */ }
+
+  // Add missing asset columns for existing databases
+  const assetCols = ['force_nominale', 'compteur_type', 'caracteristiques', 'dispositifs_protection'];
+  for (const col of assetCols) {
+    try { await database.execAsync(`ALTER TABLE assets ADD COLUMN ${col} TEXT;`); } catch (e) { /* ignore */ }
+  }
+  try { await database.execAsync(`ALTER TABLE assets ADD COLUMN compteur_valeur INTEGER;`); } catch (e) { /* ignore */ }
+
+  // Add mission_operation_assets table for existing databases
+  try {
+    await database.execAsync(`
+      CREATE TABLE IF NOT EXISTS mission_operation_assets (
+        id INTEGER PRIMARY KEY,
+        mission_id TEXT NOT NULL,
+        operation_type TEXT NOT NULL,
+        asset_id TEXT NOT NULL,
+        work_description TEXT,
+        checklist_template_id INTEGER,
+        checklist_data TEXT DEFAULT '[]',
+        created_at TEXT,
+        updated_at TEXT,
+        FOREIGN KEY (mission_id) REFERENCES missions(id),
+        FOREIGN KEY (asset_id) REFERENCES assets(id)
+      );
+    `);
+  } catch (e) { /* ignore */ }
   
   console.log('[DB] Tables created successfully');
 }
@@ -298,6 +361,9 @@ export async function clearDatabase(): Promise<void> {
     DELETE FROM nonconformities;
     DELETE FROM report_item_results;
     DELETE FROM reports;
+    DELETE FROM mission_operation_assets;
+    DELETE FROM mission_operations;
+    DELETE FROM mission_technicians;
     DELETE FROM mission_assets;
     DELETE FROM missions;
     DELETE FROM checklist_items;

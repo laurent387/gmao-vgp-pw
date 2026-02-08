@@ -176,7 +176,11 @@ class SyncService {
 
       // Order matters: respect foreign keys
       if (changes.clients) {
-        await upsert('clients', changes.clients, ['id', 'name', 'created_at']);
+        await upsert('clients', changes.clients, [
+          'id', 'name', 'created_at', 'siret', 'tva_number', 'contact_name',
+          'contact_email', 'contact_phone', 'address', 'access_instructions',
+          'billing_address', 'billing_email', 'internal_notes', 'status'
+        ]);
       }
 
       if (changes.users) {
@@ -195,7 +199,9 @@ class SyncService {
         await upsert('assets', changes.assets, [
           'id', 'code_interne', 'designation', 'categorie', 'marque', 'modele',
           'numero_serie', 'annee', 'statut', 'criticite', 'site_id', 'zone_id',
-          'mise_en_service', 'created_at', 'vgp_enabled', 'vgp_validity_months'
+          'mise_en_service', 'created_at', 'vgp_enabled', 'vgp_validity_months',
+          'force_nominale', 'compteur_type', 'compteur_valeur',
+          'caracteristiques', 'dispositifs_protection'
         ]);
       }
 
@@ -217,6 +223,32 @@ class SyncService {
         ]);
       }
 
+      // Junction tables: mission_assets, mission_technicians, mission_operations
+      if (changes.missionAssets) {
+        await upsert('mission_assets', changes.missionAssets, [
+          'id', 'mission_id', 'asset_id'
+        ]);
+      }
+
+      if (changes.missionTechnicians) {
+        await upsert('mission_technicians', changes.missionTechnicians, [
+          'id', 'mission_id', 'technician_id', 'assigned_at'
+        ]);
+      }
+
+      if (changes.missionOperations) {
+        await upsert('mission_operations', changes.missionOperations, [
+          'id', 'mission_id', 'operation_type', 'sort_order', 'created_at'
+        ]);
+      }
+
+      if (changes.missionOperationAssets) {
+        await upsert('mission_operation_assets', changes.missionOperationAssets, [
+          'id', 'mission_id', 'operation_type', 'asset_id', 'work_description',
+          'checklist_template_id', 'checklist_data', 'created_at', 'updated_at'
+        ]);
+      }
+
       if (changes.checklistTemplates) {
         await upsert('checklist_templates', changes.checklistTemplates, [
           'id', 'control_type_id', 'asset_category', 'name'
@@ -233,6 +265,12 @@ class SyncService {
         await upsert('reports', changes.reports, [
           'id', 'mission_id', 'asset_id', 'performed_at', 'performer',
           'conclusion', 'summary', 'signed_by_name', 'signed_at', 'created_at'
+        ]);
+      }
+
+      if (changes.reportItemResults) {
+        await upsert('report_item_results', changes.reportItemResults, [
+          'id', 'report_id', 'checklist_item_id', 'status', 'value_num', 'value_text', 'comment'
         ]);
       }
 

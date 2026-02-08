@@ -16,8 +16,13 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
     try {
       const changes: Record<string, any[]> = {};
 
-      // Clients
-      const clientsRes = await db.query('SELECT id, name, created_at FROM clients ORDER BY name ASC');
+      // Clients — all columns
+      const clientsRes = await db.query(`
+        SELECT id, name, created_at, siret, tva_number, contact_name, contact_email,
+               contact_phone, address, access_instructions, billing_address, billing_email,
+               internal_notes, status
+        FROM clients ORDER BY name ASC
+      `);
       changes.clients = clientsRes.rows;
 
       // Users (exclude password_hash)
@@ -26,26 +31,28 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
 
       // Sites
       const sitesRes = await db.query(`
-        SELECT s.id, s.client_id, s.name, s.address, s.created_at
-        FROM sites s ORDER BY s.name ASC
+        SELECT id, client_id, name, address, created_at
+        FROM sites ORDER BY name ASC
       `);
       changes.sites = sitesRes.rows;
 
       // Zones
       const zonesRes = await db.query(`
-        SELECT z.id, z.site_id, z.name
-        FROM zones z ORDER BY z.name ASC
+        SELECT id, site_id, name
+        FROM zones ORDER BY name ASC
       `);
       changes.zones = zonesRes.rows;
 
-      // Assets
+      // Assets — all columns including new ones
       const assetsRes = await db.query(`
-        SELECT a.id, a.code_interne, a.designation, a.categorie, a.marque, a.modele,
-               a.numero_serie, a.annee, a.statut, a.criticite, a.site_id, a.zone_id,
-               a.mise_en_service, a.created_at,
-               COALESCE(a.vgp_enabled, false) as vgp_enabled,
-               a.vgp_validity_months
-        FROM assets a ORDER BY a.code_interne ASC
+        SELECT id, code_interne, designation, categorie, marque, modele,
+               numero_serie, annee, statut, criticite, site_id, zone_id,
+               mise_en_service, created_at,
+               COALESCE(vgp_enabled, false) as vgp_enabled,
+               vgp_validity_months,
+               force_nominale, compteur_type, compteur_valeur,
+               caracteristiques::text, dispositifs_protection::text
+        FROM assets ORDER BY code_interne ASC
       `);
       changes.assets = assetsRes.rows;
 
@@ -70,6 +77,35 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
       `);
       changes.missions = missionsRes.rows;
 
+      // Mission assets (junction)
+      const missionAssetsRes = await db.query(`
+        SELECT id, mission_id, asset_id
+        FROM mission_assets ORDER BY mission_id
+      `);
+      changes.missionAssets = missionAssetsRes.rows;
+
+      // Mission technicians (junction)
+      const missionTechniciansRes = await db.query(`
+        SELECT id, mission_id, technician_id, assigned_at
+        FROM mission_technicians ORDER BY mission_id
+      `);
+      changes.missionTechnicians = missionTechniciansRes.rows;
+
+      // Mission operations
+      const missionOperationsRes = await db.query(`
+        SELECT id, mission_id, operation_type, sort_order, created_at
+        FROM mission_operations ORDER BY mission_id, sort_order
+      `);
+      changes.missionOperations = missionOperationsRes.rows;
+
+      // Mission operation assets
+      const missionOperationAssetsRes = await db.query(`
+        SELECT id, mission_id, operation_type, asset_id, work_description,
+               checklist_template_id, checklist_data::text, created_at, updated_at
+        FROM mission_operation_assets ORDER BY mission_id
+      `);
+      changes.missionOperationAssets = missionOperationAssetsRes.rows;
+
       // Checklist templates
       const checklistTemplatesRes = await db.query(`
         SELECT id, control_type_id, asset_category, name
@@ -91,6 +127,13 @@ export async function syncRoutes(fastify: FastifyInstance, db: Client) {
         FROM reports ORDER BY created_at DESC
       `);
       changes.reports = reportsRes.rows;
+
+      // Report item results
+      const reportItemResultsRes = await db.query(`
+        SELECT id, report_id, checklist_item_id, status, value_num, value_text, comment
+        FROM report_item_results ORDER BY report_id
+      `);
+      changes.reportItemResults = reportItemResultsRes.rows;
 
       // Nonconformities
       const nonconformitiesRes = await db.query(`
